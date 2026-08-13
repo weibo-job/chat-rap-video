@@ -1,0 +1,389 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<style>
+:root{
+  --bg:#000000;
+  --strip-bg:#ededed;
+  --bubble-left:#ffffff;
+  --bubble-right:#95ec69;
+  --text:#111111;
+  --name-color:#576b95;
+  --hook-yellow:#ffe600;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{
+  width:1080px;height:1920px;
+  overflow:hidden;background:var(--bg);
+  font-family:-apple-system,"PingFang SC","Microsoft YaHei","Heiti SC",sans-serif;
+}
+#canvas{
+  width:1080px;height:1920px;
+  background:var(--bg);
+  position:relative;overflow:hidden;
+}
+/* 聊天条：窄长条悬浮居中 */
+#chat-strip{
+  position:absolute;
+  left:0;right:0;
+  top:50%;transform:translateY(-50%);
+  height:340px;
+  background:var(--strip-bg);
+  display:flex;flex-direction:column;
+}
+.nav{
+  flex:none;height:60px;
+  display:flex;align-items:center;justify-content:center;
+  border-bottom:1px solid #d6d6d6;
+  background:var(--strip-bg);
+  font-size:32px;color:#111;position:relative;
+}
+.nav .back{position:absolute;left:30px;font-size:36px;color:#111;}
+.nav .count{
+  position:absolute;left:90px;
+  background:#aaa;color:#fff;border-radius:18px;
+  padding:2px 14px;font-size:24px;
+}
+.nav .name{font-size:36px;font-weight:500;}
+#messages{
+  flex:1;position:relative;overflow:hidden;
+}
+/* 气泡 */
+.msg{
+  position:absolute;
+  display:flex;align-items:flex-start;
+  opacity:0;
+  will-change:transform,opacity;
+  pointer-events:none;
+  max-width:1020px;
+}
+.msg.left{left:24px;}
+.msg.right{right:24px;flex-direction:row-reverse;}
+.msg .avatar{
+  width:48px;height:48px;border-radius:6px;
+  background:#888;flex:none;
+  display:flex;align-items:center;justify-content:center;
+  font-size:28px;color:#fff;
+  margin-top:8px;
+  background-size:cover;background-position:center;
+}
+.msg.left .avatar{margin-right:14px;}
+.msg.right .avatar{margin-left:14px;}
+.msg .bubble{
+  padding:14px 22px;
+  font-size:60px;line-height:1.2;font-weight:500;
+  border-radius:14px;position:relative;
+  max-width:880px;word-break:break-word;white-space:pre-wrap;
+}
+.msg.left .bubble{background:var(--bubble-left);color:var(--text);}
+.msg.left .bubble::before{
+  content:"";position:absolute;left:-12px;top:22px;
+  border:10px solid transparent;border-right-color:var(--bubble-left);
+}
+.msg.right .bubble{background:var(--bubble-right);color:var(--text);}
+.msg.right .bubble::after{
+  content:"";position:absolute;right:-12px;top:22px;
+  border:10px solid transparent;border-left-color:var(--bubble-right);
+}
+/* 大黄字 hook */
+.hook{
+  position:absolute;
+  left:0;right:0;top:50%;
+  text-align:center;
+  font-size:220px;font-weight:900;
+  color:var(--hook-yellow);
+  text-shadow:
+    -5px -5px 0 #000, 5px -5px 0 #000,
+    -5px 5px 0 #000, 5px 5px 0 #000,
+    0 0 30px rgba(0,0,0,0.9);
+  opacity:0;
+  letter-spacing:-6px;
+  pointer-events:none;
+  white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis;
+  padding:0 30px;
+  transform:translateY(-50%) scale(0.5);
+}
+/* 表情包 */
+.sticker{
+  position:absolute;
+  width:280px;height:280px;
+  opacity:0;
+  pointer-events:none;
+  transform:scale(0.3);
+}
+.sticker .img{
+  width:100%;height:100%;
+  background-size:cover;background-position:center;
+  background-color:#444;border-radius:14px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:120px;color:#fff;
+}
+.sticker .caption{
+  position:absolute;bottom:-50px;left:0;right:0;
+  text-align:center;color:#fff;font-size:38px;font-weight:600;
+  text-shadow:0 2px 6px rgba(0,0,0,0.9);
+}
+/* 名片 */
+.nametag{
+  position:absolute;
+  width:220px;padding:12px 14px;
+  background:#fff;border-radius:10px;
+  box-shadow:0 4px 16px rgba(0,0,0,0.5);
+  opacity:0;
+  pointer-events:none;
+}
+.nametag::after{
+  content:"";display:block;clear:both;
+}
+.nametag .img{
+  width:64px;height:64px;background:#ccc;border-radius:8px;
+  float:left;margin-right:12px;
+  background-size:cover;background-position:center;
+  display:flex;align-items:center;justify-content:center;
+  font-size:32px;color:#fff;
+}
+.nametag .title{font-size:24px;color:#111;font-weight:600;line-height:1.2;}
+.nametag .sub{font-size:20px;color:#888;margin-top:6px;line-height:1.2;}
+</style>
+</head>
+<body>
+<div id="canvas">
+  <div id="chat-strip">
+    <div class="nav">
+      <span class="back">&lt;</span>
+      <span class="count"></span>
+      <span class="name"></span>
+    </div>
+    <div id="messages"></div>
+  </div>
+  <div id="overlays"></div>
+</div>
+
+<script>
+(function(){
+  const script = window.__SCRIPT__ || {};
+  const assets = window.__ASSETS__ || {};
+
+  // nav
+  const header = script.header || {};
+  document.querySelector('.nav .back').textContent = header.back || '<';
+  document.querySelector('.nav .count').textContent = header.count || '';
+  document.querySelector('.nav .name').textContent  = header.name || (script.title || '');
+
+  const msgBox = document.getElementById('messages');
+  const overlayBox = document.getElementById('overlays');
+
+  const characters = script.characters || [];
+  const avatars = script.avatars || {};
+
+  function charById(id){ return characters.find(c=>c.id===id) || {id, side:'left'}; }
+
+  // stack 展开为多个独立 instance
+  const rawElements = script.elements || [];
+  const expanded = [];
+  rawElements.forEach(el => {
+    if (el.type === 'stack') {
+      const n = el.repeat || 4;
+      const step = el.step_ms || 150;
+      for (let i = 0; i < n; i++) {
+        expanded.push({
+          ...el,
+          id: el.id + '_s' + i,
+          type: 'bubble',
+          start_ms: el.start_ms + i * step,
+          _stackIndex: i,
+          _stackCount: n
+        });
+      }
+    } else {
+      expanded.push(el);
+    }
+  });
+
+  // 构建 DOM
+  const built = expanded.map(el => {
+    let node = null;
+    if (el.type === 'bubble') {
+      const c = charById(el.from);
+      const msg = document.createElement('div');
+      msg.className = 'msg ' + (c.side || 'left');
+      const ava = document.createElement('div');
+      ava.className = 'avatar';
+      const avaSrc = avatars[el.from];
+      if (avaSrc && assets[avaSrc]) {
+        ava.style.backgroundImage = `url(${assets[avaSrc]})`;
+      } else {
+        ava.textContent = el.from === 'me' ? '🧑' : '👤';
+      }
+      msg.appendChild(ava);
+      const bub = document.createElement('div');
+      bub.className = 'bubble';
+      bub.textContent = el.text || '';
+      msg.appendChild(bub);
+      // stack instance 走 overlayBox（黑底全屏堆叠）；普通气泡在 msgBox（聊天条内）
+      if (el._stackIndex !== undefined) {
+        overlayBox.appendChild(msg);
+        msg.style.maxWidth = '1020px';
+        // stack 用更大的字号（巨字）
+        bub.style.fontSize = '96px';
+        bub.style.padding = '22px 36px';
+        bub.style.borderRadius = '20px';
+      } else {
+        msgBox.appendChild(msg);
+      }
+      node = msg;
+    } else if (el.type === 'hook') {
+      const h = document.createElement('div');
+      h.className = 'hook';
+      h.textContent = el.text || '';
+      overlayBox.appendChild(h);
+      node = h;
+    } else if (el.type === 'sticker') {
+      const s = document.createElement('div');
+      s.className = 'sticker';
+      const img = document.createElement('div');
+      img.className = 'img';
+      if (el.src && assets[el.src]) {
+        img.style.backgroundImage = `url(${assets[el.src]})`;
+        img.textContent = '';
+      } else {
+        img.textContent = '🐱';
+      }
+      s.appendChild(img);
+      if (el.text) {
+        const cap = document.createElement('div');
+        cap.className = 'caption';
+        cap.textContent = el.text;
+        s.appendChild(cap);
+      }
+      overlayBox.appendChild(s);
+      node = s;
+    } else if (el.type === 'nametag') {
+      const n = document.createElement('div');
+      n.className = 'nametag';
+      const img = document.createElement('div');
+      img.className = 'img';
+      if (el.src && assets[el.src]) {
+        img.style.backgroundImage = `url(${assets[el.src]})`;
+        img.textContent = '';
+      } else {
+        img.textContent = el.emoji || '🏪';
+      }
+      n.appendChild(img);
+      const title = document.createElement('div');
+      title.className = 'title';
+      title.textContent = el.title || '联系人';
+      n.appendChild(title);
+      if (el.sub) {
+        const sub = document.createElement('div');
+        sub.className = 'sub';
+        sub.textContent = el.sub;
+        n.appendChild(sub);
+      }
+      overlayBox.appendChild(n);
+      node = n;
+    }
+    return { el, node };
+  });
+
+  // y 布局
+  // 普通 bubble：相对 #messages（聊天条内，0-280）
+  // stack instance bubble：相对 canvas（黑底全屏堆叠）
+  const LINE_H = 90;
+  let cursorY = 8;
+  built.forEach(b => {
+    const el = b.el;
+    if (el.type === 'bubble') {
+      if (el._stackIndex !== undefined) {
+        // stack instance：黑底全屏居中堆叠（canvas y=720 是屏幕中部）
+        const n = el._stackCount;
+        const idx = el._stackIndex;
+        const offset = (idx - (n-1)/2) * 110;
+        el._y = 720 + offset;
+      } else {
+        el._y = cursorY;
+        cursorY += LINE_H;
+      }
+    }
+  });
+
+  const ANIM_IN = 180;
+
+  window.renderAt = function(currentMs){
+    built.forEach(b => {
+      if (!b.node) return;
+      const el = b.el;
+      const start = el.start_ms || 0;
+      const t = currentMs - start;
+
+      if (el.type === 'bubble') {
+        if (t < 0) {
+          b.node.style.opacity = '0';
+          b.node.style.transform = `translateY(40px) scale(0.7)`;
+          b.node.style.top = (el._y || 0) + 'px';
+          return;
+        }
+        const p = Math.min(1, t / ANIM_IN);
+        const e = 1 - Math.pow(1 - p, 3);
+        b.node.style.opacity = String(e);
+        b.node.style.transform = `translateY(${(1-e)*40}px) scale(${0.7+0.3*e})`;
+        b.node.style.top = (el._y || 0) + 'px';
+      } else if (el.type === 'hook') {
+        const hookDur = 800;
+        if (t < 0) {
+          b.node.style.opacity = '0';
+          b.node.style.transform = `translateY(-50%) scale(0.5)`;
+        } else if (t < hookDur) {
+          const p = t / hookDur;
+          const e = 1 - Math.pow(1-p, 3);
+          b.node.style.opacity = String(e);
+          b.node.style.transform = `translateY(-50%) scale(${0.5+0.5*e})`;
+        } else {
+          b.node.style.opacity = '1';
+          b.node.style.transform = `translateY(-50%) scale(1)`;
+        }
+      } else if (el.type === 'sticker') {
+        const stDur = 350;
+        // 位置由 el.x, el.y 决定（默认屏幕中部偏左）
+        const sx = (el.x !== undefined) ? el.x : 200;
+        const sy = (el.y !== undefined) ? el.y : 600;
+        b.node.style.left = sx + 'px';
+        b.node.style.top  = sy + 'px';
+        if (t < 0) {
+          b.node.style.opacity = '0';
+          b.node.style.transform = `scale(0.3) rotate(-25deg)`;
+        } else if (t < stDur) {
+          const p = t / stDur;
+          const e = 1 - Math.pow(1-p, 3);
+          b.node.style.opacity = String(e);
+          b.node.style.transform = `scale(${0.3+0.7*e}) rotate(${(1-e)*-25}deg)`;
+        } else {
+          b.node.style.opacity = '1';
+          b.node.style.transform = `scale(1) rotate(0deg)`;
+        }
+      } else if (el.type === 'nametag') {
+        const ntDur = 300;
+        const nx = (el.x !== undefined) ? el.x : 800;
+        const ny = (el.y !== undefined) ? el.y : 350;
+        b.node.style.left = nx + 'px';
+        b.node.style.top  = ny + 'px';
+        if (t < 0) {
+          b.node.style.opacity = '0';
+        } else if (t < ntDur) {
+          const p = t / ntDur;
+          const e = 1 - Math.pow(1-p, 3);
+          b.node.style.opacity = String(e);
+        } else {
+          b.node.style.opacity = '1';
+        }
+      }
+    });
+  };
+
+  window.renderAt(window.__CURRENT_MS__ || 0);
+})();
+</script>
+</body>
+</html>

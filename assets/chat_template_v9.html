@@ -1,0 +1,811 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<style>
+:root{
+  --bg:#ededed;
+  --nav-bg:#ededed;
+  --bubble-left:#ffffff;
+  --bubble-right:#95ec69;
+  --text:#1a1a1a;
+  --hook-yellow:#ffe600;
+  --beam-green:#7fff00;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-font-smoothing:antialiased;}
+html,body{
+  width:1080px;height:1920px;
+  overflow:hidden;background:#000;
+  font-family:-apple-system,"PingFang SC","Microsoft YaHei","Heiti SC",sans-serif;
+}
+#canvas{
+  width:1080px;height:1920px;
+  position:relative;overflow:hidden;
+  background:#000;
+}
+
+/* 聊天窗：固定居中，占总画面 ~52%（用户要求 40-60%） */
+#phone{
+  position:absolute;left:0;top:460px;
+  width:1080px;height:1000px;
+  background:var(--bg);
+  overflow:hidden;
+}
+
+/* 状态栏 */
+#status-bar{
+  position:absolute;left:0;right:0;top:0;height:56px;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 28px;
+  font-size:28px;font-weight:600;color:#000;
+  z-index:50;
+  transition:opacity 0.5s ease, transform 0.5s ease;
+}
+#status-bar .time{font-size:30px;letter-spacing:1px;}
+#status-bar .icons{display:flex;align-items:center;gap:10px;}
+#status-bar .signal{display:flex;align-items:flex-end;gap:4px;height:22px;}
+#status-bar .signal i{display:block;width:7px;background:#000;border-radius:1px;}
+#status-bar .signal i:nth-child(1){height:7px;opacity:.35;}
+#status-bar .signal i:nth-child(2){height:11px;opacity:.55;}
+#status-bar .signal i:nth-child(3){height:15px;opacity:.75;}
+#status-bar .signal i:nth-child(4){height:19px;opacity:1;}
+#status-bar .wifi{width:30px;height:24px;position:relative;}
+#status-bar .wifi::before{content:"";position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:8px;height:8px;background:#000;border-radius:50%;}
+#status-bar .wifi::after{content:"";position:absolute;bottom:2px;left:50%;transform:translateX(-50%);width:26px;height:26px;border:4px solid #000;border-top-color:transparent;border-radius:50%;}
+#status-bar .battery{display:flex;align-items:center;gap:6px;}
+#status-bar .battery .case{width:32px;height:16px;border:2px solid #000;border-radius:3px;position:relative;padding:2px;}
+#status-bar .battery .case::after{content:"";position:absolute;right:-5px;top:50%;transform:translateY(-50%);width:3px;height:8px;background:#000;border-radius:0 1px 1px 0;}
+#status-bar .battery .fill{width:100%;height:100%;background:#000;border-radius:1px;}
+#status-bar .battery .num{font-size:24px;}
+
+/* 导航栏 */
+#nav-bar{
+  position:absolute;left:0;right:0;top:56px;height:100px;
+  background:var(--nav-bg);
+  display:flex;align-items:center;justify-content:center;
+  border-bottom:1px solid #d6d6d6;
+  z-index:50;
+  transition:opacity 0.5s ease, transform 0.5s ease;
+}
+#nav-bar .back{position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:44px;color:#000;font-weight:300;width:70px;text-align:center;}
+#nav-bar .name{font-size:40px;color:#000;font-weight:600;max-width:720px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;}
+#nav-bar .more{position:absolute;right:24px;top:50%;transform:translateY(-50%);font-size:42px;color:#000;letter-spacing:3px;}
+
+/* 消息滚动容器（模拟微信向上滚动，z-index:0 确保不盖 #nav-bar） */
+#messages{
+  position:absolute;left:0;right:0;top:156px;bottom:110px;
+  overflow:hidden;
+  z-index:0;
+}
+.msg{
+  position:absolute;left:0;right:0;
+  display:flex;align-items:flex-start;
+  opacity:0;
+  will-change:transform,opacity;
+  pointer-events:none;
+  /* 不用 CSS transition：renderAt 每帧重置 opacity 会导致每帧都在过渡中，截图时几乎不可见 */
+}
+.msg.left .row{flex-direction:row;}
+.msg .row{display:flex;align-items:flex-start;width:100%;padding:0 26px;}
+.msg.right .row{flex-direction:row-reverse;}
+.msg .avatar{
+  width:126px;height:126px;border-radius:16px;
+  background:#d9d9d9;flex:none;
+  background-size:cover;background-position:center;
+}
+.msg.left .avatar{margin-right:26px;}
+.msg.right .avatar{margin-left:26px;}
+.msg .bubble{
+  padding:30px 38px;
+  font-size:50px;line-height:1.4;font-weight:500;
+  position:relative;
+  max-width:920px;word-break:break-word;white-space:pre-wrap;
+  box-shadow:0 2px 4px rgba(0,0,0,0.08);
+}
+.msg.left .bubble{background:var(--bubble-left);color:var(--text);border-radius:12px 16px 16px 16px;}
+.msg.left .bubble::before{content:"";position:absolute;left:-10px;top:26px;border:8px solid transparent;border-right-color:var(--bubble-left);}
+.msg.right .bubble{background:var(--bubble-right);color:var(--text);border-radius:16px 12px 16px 16px;}
+.msg.right .bubble::after{content:"";position:absolute;right:-10px;top:26px;border:8px solid transparent;border-left-color:var(--bubble-right);}
+
+/* 输入栏 */
+#input-bar{
+  position:absolute;left:0;right:0;bottom:0;height:110px;
+  background:#f7f7f7;
+  display:flex;align-items:center;gap:18px;
+  padding:0 24px;
+  border-top:1px solid #e0e0e0;
+  transition:opacity 0.5s ease, transform 0.5s ease;
+}
+
+/* 开场 3-5s 后隐藏 UI（用户 2026-08-11 定稿：只留头像+气泡消息条） */
+.ui-hidden{ opacity:0 !important; transform:translateY(-40px); pointer-events:none; }
+#input-bar.ui-hidden{ transform:translateY(40px); }
+#input-bar .voice-btn{width:66px;height:66px;border-radius:50%;border:2px solid #888;display:flex;align-items:center;justify-content:center;font-size:32px;color:#555;}
+#input-bar .input-box{flex:1;height:66px;background:#fff;border-radius:8px;border:1px solid #ddd;}
+#input-bar .emoji{width:56px;height:56px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:38px;color:#555;}
+#input-bar .plus{width:56px;height:56px;border-radius:50%;border:2px solid #888;display:flex;align-items:center;justify-content:center;font-size:40px;color:#555;}
+
+/* 遮罩变暗 */
+#dim{
+  position:absolute;left:0;right:0;top:0;bottom:0;
+  background:rgba(0,0,0,0);
+  pointer-events:none;z-index:80;
+}
+
+/* hook 大黄字：上方重点信息区（下移，top 240 附近） */
+.hook{
+  position:absolute;
+  left:0;right:0;top:240px;
+  text-align:center;
+  font-size:230px;font-weight:900;
+  color:var(--hook-yellow);
+  text-shadow:
+    -7px -7px 0 #000, 7px -7px 0 #000,
+    -7px 7px 0 #000, 7px 7px 0 #000,
+    0 0 60px rgba(0,0,0,0.95);
+  opacity:0;
+  letter-spacing:-8px;
+  pointer-events:none;
+  white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis;
+  padding:0 40px;
+  /* v7 抖音风：入场带倾斜（renderAt 里通过 transform rotate 实时叠加） */
+  transform:translateY(-50%) scale(0.4) rotate(-3deg);
+  z-index:100;
+}
+
+/* 表情包 sticker：可横跨上下黑边弹出（v7 抖音风）
+   y < 80 或 y > 1700 时会出现在黑边区，配合倾斜入场 */
+.sticker{
+  position:absolute;
+  width:380px;height:380px;  /* v7 略放大，更像抖音原版 */
+  opacity:0;
+  pointer-events:none;
+  transform:scale(0.3) rotate(-12deg);  /* v7 抖音风：默认倾斜 12°，renderAt 里动态旋转 */
+  z-index:90;
+  background-size:contain;background-repeat:no-repeat;background-position:center;
+}
+
+/* 绿色光柱：上方重点区降下 */
+.light-beam{
+  position:absolute;
+  left:50%;top:200px;
+  width:180px;height:0;
+  transform:translateX(-50%);
+  background:linear-gradient(to bottom, rgba(127,255,0,0.9), rgba(127,255,0,0));
+  filter:blur(18px);
+  opacity:0;
+  pointer-events:none;z-index:70;
+}
+
+/* 文字特写层：上方重点信息区 */
+.text-zoom{
+  position:absolute;
+  left:0;right:0;top:330px;
+  text-align:center;
+  font-size:170px;font-weight:900;
+  color:var(--text);
+  opacity:0;
+  pointer-events:none;
+  transform:translateY(-50%) scale(0.5);
+  z-index:95;
+}
+.text-zoom.left{color:#fff;text-shadow:0 4px 20px rgba(0,0,0,0.5);}
+.text-zoom.right{color:#95ec69;text-shadow:0 4px 20px rgba(0,0,0,0.5);}
+
+/* 白条转场 */
+.flash-bar{
+  position:absolute;left:-200px;right:-200px;top:50%;
+  height:0;background:#fff;
+  transform:translateY(-50%) rotate(-5deg);
+  opacity:0;pointer-events:none;z-index:200;
+}
+
+/* v8 大动画：全屏冲击波（大动画消息进入时扩散一圈，艺术感） */
+.shockwave{
+  position:absolute;left:50%;top:50%;
+  width:60px;height:60px;
+  border-radius:50%;
+  background:radial-gradient(circle, rgba(255,230,0,0.55) 0%, rgba(255,230,0,0.15) 45%, rgba(255,230,0,0) 70%);
+  transform:translate(-50%,-50%) scale(0.1);
+  opacity:0;pointer-events:none;z-index:150;
+}
+
+/* v8 大动画：全屏斜切光带（大动画消息进入时扫过） */
+.light-sweep{
+  position:absolute;left:-40%;right:-40%;top:-20%;bottom:-20%;
+  background:linear-gradient(100deg, transparent 42%, rgba(255,255,255,0.14) 50%, transparent 58%);
+  transform:translateX(-110%) rotate(-8deg);
+  opacity:0;pointer-events:none;z-index:140;
+}
+
+/* 字幕层（用户 2026-08-11 定稿）：说唱歌词字幕 = 聊天文字，每条 ≤15 字；上移到聊天框下方 */
+#subtitle{
+  position:absolute;left:0;right:0;bottom:340px;
+  text-align:center;
+  font-size:60px;font-weight:800;
+  color:#ffffff;
+  text-shadow:
+    -4px -4px 0 #000, 4px -4px 0 #000,
+    -4px 4px 0 #000, 4px 4px 0 #000,
+    0 0 24px rgba(0,0,0,0.9);
+  opacity:0;
+  pointer-events:none;
+  z-index:110;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  padding:0 60px;
+  letter-spacing:2px;
+}
+</style>
+</head>
+<body>
+<div id="canvas">
+  <div id="phone">
+    <div id="status-bar">
+      <div class="time">18:58</div>
+      <div class="icons">
+        <div class="signal"><i></i><i></i><i></i><i></i></div>
+        <div class="wifi"></div>
+        <div class="battery"><div class="case"><div class="fill"></div></div><div class="num">78</div></div>
+      </div>
+    </div>
+    <div id="nav-bar">
+      <span class="back">&lt;</span>
+      <span class="name"></span>
+      <span class="more">···</span>
+    </div>
+    <div id="messages"></div>
+    <div id="input-bar">
+      <div class="voice-btn">·</div>
+      <div class="input-box"></div>
+      <div class="emoji">☺</div>
+      <div class="plus">+</div>
+    </div>
+  </div>
+  <div id="dim"></div>
+  <div id="overlays"></div>
+  <div class="flash-bar"></div>
+  <div class="shockwave" id="shockwave"></div>
+  <div class="light-sweep" id="lightSweep"></div>
+  <div id="subtitle"></div>
+</div>
+
+<script>
+const SCRIPT = window.__SCRIPT__ || {};
+const ASSETS = window.__ASSETS__ || {};
+const HEADER = SCRIPT.header || {back:'<', name:'专家老张'};
+const AVATARS = SCRIPT.avatars || {};
+const CHARACTERS = {};
+(SCRIPT.characters || []).forEach(c => CHARACTERS[c.id] = c);
+
+// 设置标题
+const nameEl = document.querySelector('#nav-bar .name');
+if(nameEl) nameEl.textContent = HEADER.name || '专家老张';
+// 设置状态栏时间（剧本 statusTime 覆盖）
+const timeEl = document.querySelector('#status-bar .time');
+if(timeEl && SCRIPT.statusTime) timeEl.textContent = SCRIPT.statusTime;
+const batteryEl = document.querySelector('#status-bar .battery .num');
+if(batteryEl && SCRIPT.battery) batteryEl.textContent = SCRIPT.battery;
+
+// 设置头像
+function setAvatar(el, charId){
+  const src = ASSETS[AVATARS[charId]];
+  if(src) el.style.backgroundImage = `url(${src})`;
+  else el.textContent = (CHARACTERS[charId] && CHARACTERS[charId].name ? CHARACTERS[charId].name[0] : '?');
+}
+
+// 创建消息元素
+const msgMap = {};
+const msgsContainer = document.getElementById('messages');
+const elements = SCRIPT.elements || [];
+
+// v9：所有消息固定在同一位置（消息区中央），靠入场/退场动画动，不滚动、不保留多条
+const MSG_CENTER_Y = 280;   // 消息区中央位置（messages 容器约 940 高，中央偏下留字幕空间）
+let msgIndex = 0;
+const bubbleList = [];
+
+elements.forEach(el => {
+  if(el.type === 'bubble' || el.type === 'stack'){
+    const char = CHARACTERS[el.from] || {side:'left'};
+    const side = char.side || 'left';
+    const div = document.createElement('div');
+    div.className = `msg ${side}`;
+    const y = MSG_CENTER_Y;
+    div.style.position = 'absolute';
+    div.style.left = '0';
+    div.style.right = '0';
+    div.style.top = y + 'px';
+    div.innerHTML = `<div class="row"><div class="avatar"></div><div class="bubble">${el.text || ''}</div></div>`;
+    setAvatar(div.querySelector('.avatar'), el.from);
+    msgsContainer.appendChild(div);
+    msgMap[el.id] = {el:el, node:div, y:y};
+    bubbleList.push({id:el.id, node:div, y:y, side:side});
+    el._msgIndex = msgIndex;
+    msgIndex++;
+  }
+});
+
+const overlays = document.getElementById('overlays');
+const hookMap = {};
+const stickerMap = {};
+const beamMap = {};
+const zoomMap = {};
+
+elements.forEach(el => {
+  if(el.type === 'hook'){
+    const div = document.createElement('div');
+    div.className = 'hook';
+    div.textContent = el.text || '';
+    overlays.appendChild(div);
+    hookMap[el.id] = {el:el, node:div};
+  } else if(el.type === 'sticker'){
+    const div = document.createElement('div');
+    div.className = 'sticker';
+    const src = ASSETS[el.src];
+    if(src){
+      div.style.backgroundImage = `url(${src})`;
+    } else if(el.emoji){
+      div.textContent = el.emoji;
+      div.style.display = 'flex';
+      div.style.alignItems = 'center';
+      div.style.justifyContent = 'center';
+      div.style.fontSize = (el.emojiSize || 200) + 'px';
+      div.style.lineHeight = '1';
+    }
+    div.style.left = (el.x !== undefined ? el.x : 100) + 'px';
+    div.style.top = (el.y !== undefined ? el.y : 300) + 'px';
+    overlays.appendChild(div);
+    stickerMap[el.id] = {el:el, node:div};
+  } else if(el.type === 'beam'){
+    const div = document.createElement('div');
+    div.className = 'light-beam';
+    overlays.appendChild(div);
+    beamMap[el.id] = {el:el, node:div};
+  } else if(el.type === 'textzoom'){
+    const div = document.createElement('div');
+    div.className = 'text-zoom ' + (el.side || 'left');
+    div.textContent = el.text || '';
+    overlays.appendChild(div);
+    zoomMap[el.id] = {el:el, node:div};
+  }
+});
+
+let dimOpacity = 0;
+function applyDim(){
+  const dim = document.getElementById('dim');
+  if(dim) dim.style.background = `rgba(0,0,0,${dimOpacity})`;
+}
+
+// 情绪 + 动态大小引擎（用户 2026-08-11 定稿）：
+// 聊天框大小不固定不变——①全局轻微"呼吸"（缓慢放大缩小，画面不死板）
+// ②每条消息进入时轻微放大脉冲（跟说唱节奏同拍，有大小起伏但不每时每刻剧烈变）
+// ③情绪动画（惊讶裂开/兴奋微笑/生气晃动/难过下沉/大笑摇摆/zoom放大强调）优先级最高
+function applyPhoneMotion(emotion, t, dur, breathPhase){
+  const phone = document.getElementById('phone');
+  if(!phone) return;
+  const em = emotion || 'normal';
+  const decay = Math.max(0, 1 - t / (dur * 0.8));
+
+  // ① 呼吸：缓慢轻微，幅度 0.8%，周期约 4s
+  let breath = 1 + 0.008 * Math.sin((breathPhase % 4000) / 4000 * Math.PI * 2);
+
+  // ② 消息进入脉冲：前 450ms 放大弹一下（scale 1→1.03→1），营造节奏感
+  let pulse = 1;
+  if(t >= 0 && t < 450){
+    const p = t / 450;
+    pulse = 1 + 0.03 * Math.sin(p * Math.PI);
+  }
+
+  let transform = '';
+  let extra = {};
+
+  if(em === 'surprise'){
+    if(t < 700 && decay > 0){
+      const s = Math.sin(t / 38) * 0.07 * decay;
+      transform = `scaleX(${breath + s})`;
+    } else {
+      transform = `scale(${breath * pulse})`;
+    }
+    if(t > 180 && t < 900) extra.boxShadow = 'inset 0 0 0 6px #000, 14px 0 0 -3px #fff, -14px 0 0 -3px #fff, 0 0 40px rgba(0,0,0,0.5)';
+  } else if(em === 'excited'){
+    transform = `scale(${breath * pulse})`;
+    extra.borderRadius = '0 0 140px 140px';
+  } else if(em === 'angry'){
+    transform = `scale(${breath * pulse})`;
+    // v8 修复：不用 hue-rotate 避免绿气泡变黄，改用饱和度+亮度表达"情绪沉重"
+    extra.filter = 'saturate(1.2) brightness(0.92) contrast(1.05)';
+  } else if(em === 'sad'){
+    transform = `scale(${breath * pulse * 0.98})`;
+    extra.filter = 'saturate(0.75) brightness(0.96)';
+  } else if(em === 'laugh'){
+    transform = `scale(${breath * pulse})`;
+  } else if(em === 'zoom'){
+    const z = 1 + 0.05 * decay * Math.max(0, Math.sin(Math.PI * Math.min(1, t / 900)));
+    transform = `scale(${breath * pulse * z})`;
+  } else {
+    // normal：v7 抖音风持续 wobble（让画面始终有生命感，不死板）
+    const wobbleScale = 1 + 0.012 * Math.sin((breathPhase % 1800) / 1800 * Math.PI * 2);
+    transform = `scale(${breath * pulse * wobbleScale})`;
+  }
+
+  phone.style.transform = transform;
+  phone.style.boxShadow = extra.boxShadow || 'none';
+  phone.style.borderRadius = extra.borderRadius || '0';
+  phone.style.filter = extra.filter || 'none';
+}
+
+// 缓动
+function easeOutBack(t){ const c1=1.70158,c3=c1+1; return 1+c3*Math.pow(t-1,3)+c1*Math.pow(t-1,2); }
+function easeOutCubic(t){ return 1-Math.pow(1-t,3); }
+function easeOutElastic(t){ const c4=(2*Math.PI)/3; return t===0?0:t===1?1:Math.pow(2,-10*t)*Math.sin((t*10-0.75)*c4)+1; }
+function easeOutBounce(t){ const n1=7.5625,d1=2.75; if(t<1/d1)return n1*t*t; if(t<2/d1)return n1*(t-=1.5/d1)*t+0.75; if(t<2.5/d1)return n1*(t-=2.25/d1)*t+0.9375; return n1*(t-=2.625/d1)*t+0.984375; }
+
+const ANIM_IN = 80;  // v7 抖音风：硬切弹入（80ms 内完成，参考抖音原版节奏）
+const UI_HIDE_AT = 3500; // 开场 3.5s 后隐藏完整 UI，只留头像+气泡消息条（用户 2026-08-11 定稿）
+const WOBBLE_AMP = 1.6;   // v7 抖音风：气泡抖动幅度（像素）
+const ROT_AMP = 1.5;      // v7 抖音风：气泡倾斜幅度（度）
+
+// ===== v9 入场/退场随机系统（用户 2026-08-12 定稿：聊天条不限制保留条数、说完就飞走/掉落/消失、出场方式随机）=====
+// 入场类型池：天降 / 左飞 / 右飞 / 旋转 / 砸入 / 脉冲 / 默认小弹入（用消息序号做确定性伪随机，保证逐帧一致）
+const ENTER_TYPES = ['drop-in', 'fly-left', 'fly-right', 'spin-in', 'slam', 'zoom-punch', 'pop'];
+const ENTER_MS = 550;      // 入场动画时长
+// 退场类型池：向左飞走 / 向右飞走 / 向下掉落 / 淡出消失
+const EXIT_TYPES = ['fly-out-left', 'fly-out-right', 'drop-out', 'fade-out'];
+const EXIT_MS = 450;       // 退场动画时长
+function enterTypeFor(idx){ return ENTER_TYPES[Math.abs(idx * 7 + 3) % ENTER_TYPES.length]; }  // 伪随机（确定性）
+function exitTypeFor(idx){ return EXIT_TYPES[Math.abs(idx * 5 + 1) % EXIT_TYPES.length]; }
+// 入场 transform（side: 1=右侧/我, -1=左侧/对方；t: 距入场毫秒；scrollY: 滚动偏移）
+function enterTransform(type, side, t, scrollY){
+  const p = Math.min(1, t / ENTER_MS);
+  const s = side === 1 ? 1 : -1;
+  let tx = 0, ty = 0, rot = 0, sc = 1;
+  if(type === 'drop-in'){
+    // 从天而降：translateY(-900) → 0，轻微旋转
+    const e = easeOutBounce(p);
+    ty = (1 - e) * -900;
+    rot = s * 12 * (1 - p);
+    sc = 0.7 + 0.3 * e;
+  } else if(type === 'fly-left'){
+    // 从左边飞入
+    const e = easeOutBack(p);
+    tx = (1 - e) * -1100;
+    rot = 10 * (1 - p);
+    sc = 0.5 + 0.5 * e;
+  } else if(type === 'fly-right'){
+    // 从右边飞入
+    const e = easeOutBack(p);
+    tx = (1 - e) * 1100;
+    rot = -10 * (1 - p);
+    sc = 0.5 + 0.5 * e;
+  } else if(type === 'spin-in'){
+    // 旋转 540° 入场
+    const e = easeOutBack(p);
+    rot = s * 540 * (1 - e);
+    ty = (1 - e) * 260;
+    sc = 0.3 + 0.7 * e;
+  } else if(type === 'slam'){
+    // 从下方砸入 + 弹性回弹
+    const e = easeOutBounce(p);
+    ty = (1 - e) * 900;
+    rot = s * 14 * (1 - p);
+    sc = 0.6 + 0.4 * e;
+  } else if(type === 'zoom-punch'){
+    // 大脉冲：先压扁再放大
+    const e = easeOutCubic(p);
+    const punch = Math.sin(p * Math.PI);
+    sc = 0.3 + 0.85 * e + 0.12 * punch * (1 - p);
+    rot = s * 6 * (1 - p);
+  } else {
+    // pop：默认小弹入（v7 风格）
+    const e = easeOutBack(Math.min(1, t / ANIM_IN));
+    tx = s * 60 * (1 - e);
+    rot = s * ROT_AMP * (1 - e);
+    sc = 0.85 + 0.15 * e;
+  }
+  return `translateY(${-scrollY + ty}px) translateX(${tx}px) scale(${sc}) rotate(${rot}deg)`;
+}
+// 退场 transform（t: 距退场开始毫秒；scrollY: 滚动偏移）
+function exitTransform(type, side, t, scrollY){
+  const p = Math.min(1, t / EXIT_MS);
+  const s = side === 1 ? 1 : -1;
+  let tx = 0, ty = 0, rot = 0, sc = 1;
+  if(type === 'fly-out-left'){
+    tx = p * -1000; rot = -12 * p; sc = 1 - 0.2 * p;
+  } else if(type === 'fly-out-right'){
+    tx = p * 1000; rot = 12 * p; sc = 1 - 0.2 * p;
+  } else if(type === 'drop-out'){
+    ty = p * 900; rot = s * 20 * p; sc = 1 - 0.1 * p;
+  } else {
+    // fade-out：淡出（保持原位）
+    sc = 1 - 0.3 * p;
+  }
+  return `translateY(${-scrollY + ty}px) translateX(${tx}px) scale(${sc}) rotate(${rot}deg)`;
+}
+const HOOK_ROT = 3;       // v7 抖音风：hook 大黄字入场倾斜（度）
+
+// ===== v8 大动画系统（用户 2026-08-12 定稿：动画要有艺术感、幅度要大、偶尔来一下）=====
+// 每 BIG_EVERY 条消息触发一次"大动画"（大幅飞入/旋转入场/砸入/大脉冲），其余保持小动画
+const BIG_EVERY = 4;      // 每 4 条消息来一次大动画（第 4、8、12、16...条）
+const BIG_ANIM_MS = 650;  // 大动画持续时间（毫秒），比小动画长，更有镜头感
+// 大动画类型池（按消息序号轮流用，避免千篇一律）
+const BIG_TYPES = ['fly-in', 'spin-in', 'slam', 'zoom-punch'];
+function bigTypeFor(idx){ return BIG_TYPES[idx % BIG_TYPES.length]; }
+// 大动画 transform（side: 1=右侧/我, -1=左侧/对方；scrollY 为滚动偏移）
+function bigTransform(type, side, t, scrollY){
+  const p = Math.min(1, t / BIG_ANIM_MS);
+  let tx = 0, ty = 0, rot = 0, sc = 1;
+  const s = side === 1 ? 1 : -1;
+  if(type === 'fly-in'){
+    // 从屏幕外大幅飞入 + 回弹（艺术感拉满）
+    const e = easeOutBack(p);
+    tx = s * 1100 * (1 - e);
+    ty = (1 - e) * -180;
+    rot = s * 28 * (1 - e);
+    sc = 0.5 + 0.5 * e;
+  } else if(type === 'spin-in'){
+    // 旋转 540° 入场（转一圈半砸下来）
+    const e = easeOutBack(p);
+    rot = s * 540 * (1 - e);
+    ty = (1 - e) * 260;
+    sc = 0.3 + 0.7 * e;
+  } else if(type === 'slam'){
+    // 从下方砸入 + 弹性回弹
+    const e = easeOutBounce(p);
+    ty = (1 - e) * 900;
+    rot = s * 14 * (1 - p);
+    sc = 0.6 + 0.4 * e;
+  } else if(type === 'zoom-punch'){
+    // 大脉冲：先压扁再放大（拳头砸屏感）
+    const e = easeOutCubic(p);
+    const punch = Math.sin(p * Math.PI);
+    sc = 0.3 + 0.85 * e + 0.12 * punch * (1 - p);
+    rot = s * 6 * (1 - p);
+  }
+  return `translateY(${-scrollY + ty}px) translateX(${tx}px) scale(${sc}) rotate(${rot}deg)`;
+}
+
+// 节拍表（BGM 重拍时间点，用于字幕严格跟音频同步）
+const BEATS = (SCRIPT._beats || []).map(b => b.t_ms);
+function nearestBeat(ms){
+  if(!BEATS.length) return ms;
+  let best = BEATS[0];
+  for(const bt of BEATS){ if(Math.abs(bt-ms) < Math.abs(best-ms)) best = bt; }
+  return best;
+}
+
+window.renderAt = function(currentMs){
+  // 开场 3.5s 后隐藏状态栏/导航栏/输入栏（display:none 彻底移除，底部不留绿色区域），扩展消息显示区
+  const uiHidden = currentMs > UI_HIDE_AT;
+  ['#status-bar','#nav-bar','#input-bar'].forEach(sel => {
+    const el = document.querySelector(sel);
+    if(el){
+      if(uiHidden){ el.style.display = 'none'; }
+      else { el.style.display = ''; }
+    }
+  });
+  const msgsC = document.getElementById('messages');
+  if(msgsC){
+    if(uiHidden){ msgsC.style.top = '30px'; msgsC.style.bottom = '30px'; }
+    else { msgsC.style.top = '156px'; msgsC.style.bottom = '110px'; }
+  }
+  // UI 隐藏后聊天框背景透明（去掉灰色背景，只留消息气泡悬浮在画面上）
+  const phoneEl = document.getElementById('phone');
+  if(phoneEl) phoneEl.style.background = uiHidden ? 'transparent' : '';
+  // 重置 flash-bar（防止白色斜线残留）
+  const flashBar = document.querySelector('.flash-bar');
+  if(flashBar){ flashBar.style.height = '0'; flashBar.style.opacity = '0'; }
+
+  // v8 大动画：重置冲击波 + 光带（每帧先清，大动画消息进入时触发）
+  const shockEl = document.getElementById('shockwave');
+  const sweepEl = document.getElementById('lightSweep');
+  if(shockEl){ shockEl.style.opacity = '0'; shockEl.style.transform = 'translate(-50%,-50%) scale(0.1)'; }
+  if(sweepEl){ sweepEl.style.opacity = '0'; sweepEl.style.transform = 'translateX(-110%) rotate(-8deg)'; }
+
+  // 重置特效
+  Object.values(hookMap).forEach(h => { h.node.style.opacity = '0'; h.node.style.transform = 'translateY(-50%) scale(0.4)'; });
+  Object.values(stickerMap).forEach(s => { s.node.style.opacity = '0'; s.node.style.transform = 'scale(0.3) rotate(-20deg)'; });
+  Object.values(beamMap).forEach(b => { b.node.style.opacity = '0'; b.node.style.height = '0'; });
+  Object.values(zoomMap).forEach(z => { z.node.style.opacity = '0'; z.node.style.transform = 'translateY(-50%) scale(0.5)'; });
+  dimOpacity = 0;
+
+  // 找当前激活消息（最新的已开始未结束的 bubble/stack）
+  let activeEl = null;
+  let activeElT = -Infinity;
+  elements.forEach(el => {
+    const t = currentMs - el.start_ms;
+    const dur = el.duration_ms || 2000;
+    if((el.type === 'bubble' || el.type === 'stack') && msgMap[el.id] && t >= 0 && t < dur + ANIM_IN + 300){
+      if(el.start_ms > activeElT){ activeElT = el.start_ms; activeEl = el; }
+    }
+  });
+
+  // 消息显示：v9 每条消息按「入场→停留→退场→消失」生命周期播放，不保留多条
+  // scrollY = 0：消息固定在中部区域（v9 不滚动，每条说完就走）
+  const activeIdx = activeEl ? activeEl._msgIndex : -1;
+  let scrollY = 0;
+  bubbleList.forEach(b => {
+    const el = msgMap[b.id].el;
+    const side = b.side === 'right' ? 1 : -1;
+    // v9 生命周期：入场(ENTER_MS) → 停留(duration) → 退场(EXIT_MS) → 消失
+    const t = currentMs - el.start_ms;
+    const enterEnd = ENTER_MS;
+    const stayEnd = enterEnd + (el.duration_ms || 2000);
+    const exitEnd = stayEnd + EXIT_MS;
+    if(t < 0){
+      b.node.style.opacity = '0';
+      b.node.style.transform = `translateY(${-scrollY}px)`;
+    } else if(t < enterEnd){
+      // ===== 入场：随机方式（天降/左飞/右飞/旋转/砸入/脉冲/默认）=====
+      const eType = enterTypeFor(el._msgIndex);
+      b.node.style.opacity = '1';
+      b.node.style.transform = enterTransform(eType, side, t, scrollY);
+      // 入场带动全屏冲击波 + 光带（大动作时）
+      const shock = document.getElementById('shockwave');
+      const sweep = document.getElementById('lightSweep');
+      if(shock){
+        const sp = t / 420;
+        shock.style.opacity = String(Math.max(0, 1 - sp) * 0.9);
+        shock.style.transform = `translate(-50%,-50%) scale(${0.1 + 14 * Math.min(1, sp)})`;
+      }
+      if(sweep){
+        const swp = Math.min(1, t / 500);
+        sweep.style.opacity = String(Math.sin(swp * Math.PI) * 0.8);
+        sweep.style.transform = `translateX(${-110 + 220 * swp}%) rotate(-8deg)`;
+      }
+    } else if(t < stayEnd){
+      // ===== 停留：全亮 + 轻微抖动 =====
+      const wobbleX = Math.sin(t / 80) * WOBBLE_AMP * Math.max(0, 1 - t / 900);
+      const wobbleY = Math.cos(t / 90) * WOBBLE_AMP * Math.max(0, 1 - t / 900);
+      b.node.style.opacity = '1';
+      b.node.style.transform = `translateY(${-scrollY + wobbleY}px) translateX(${wobbleX}px)`;
+    } else if(t < exitEnd){
+      // ===== 退场：说完就飞走/掉落/消失（不保留在画面）=====
+      const xType = exitTypeFor(el._msgIndex);
+      const xt = t - stayEnd;
+      const xp = Math.min(1, xt / EXIT_MS);
+      b.node.style.opacity = String(1 - xp);
+      b.node.style.transform = exitTransform(xType, side, xt, scrollY);
+    } else {
+      // 已退场：隐藏
+      b.node.style.opacity = '0';
+      b.node.style.transform = `translateY(${-scrollY}px)`;
+    }
+  });
+
+  // 滚动：由每条消息元素自身 translateY(-scrollY) 完成（见上方消息显示循环），容器不再 transform
+
+  if(activeEl){
+    // 情绪 + 动态大小动画：聊天框根据消息情绪做动画（惊讶裂开/兴奋微笑抖动/生气晃动/难过下沉/大笑摇摆/放大强调）+ 全局呼吸 + 消息进入脉冲
+    const t = currentMs - activeEl.start_ms;
+    applyPhoneMotion(activeEl.emotion, t, activeEl.duration_ms || 2000, currentMs);
+  } else {
+    // 无激活消息：聊天框复原
+    const phone = document.getElementById('phone');
+    if(phone){
+      phone.style.transform = '';
+      phone.style.boxShadow = 'none';
+      phone.style.borderRadius = '0';
+      phone.style.filter = 'none';
+    }
+  }
+
+  // 字幕：说唱歌词字幕 = 聊天文字，每条 ≤15 字，严格吸附 BGM 节拍跟紧音频（用户 2026-08-11 定稿）
+  const subtitleEl = document.getElementById('subtitle');
+  if(subtitleEl){
+    if(activeEl && msgMap[activeEl.id]){
+      let subText = msgMap[activeEl.id].el.text || '';
+      // 取第一行 + 截断到 15 字
+      subText = subText.split('\n')[0].replace(/[？？!！.。…]+$/,'');
+      if(subText.length > 15) subText = subText.slice(0, 15) + '…';
+      // 字幕显示窗口 = 当前句吸附节拍 ~ 下一句吸附节拍（跟说唱重拍严格同步）
+      const subStart = nearestBeat(activeEl.start_ms);
+      // 找下一句的吸附节拍作为结束
+      let subEnd = subStart + (activeEl.duration_ms || 2000);
+      const nextEl = elements.filter(e => (e.type==='bubble'||e.type==='stack') && msgMap[e.id] && e.start_ms > activeEl.start_ms)
+                             .sort((a,b) => a.start_ms - b.start_ms)[0];
+      if(nextEl) subEnd = nearestBeat(nextEl.start_ms);
+      if(currentMs >= subStart && currentMs < subEnd){
+        subtitleEl.textContent = subText;
+        subtitleEl.style.opacity = '1';
+      } else {
+        subtitleEl.style.opacity = '0';
+      }
+    } else {
+      subtitleEl.style.opacity = '0';
+    }
+  }
+
+  // 特效
+  elements.forEach(el => {
+    const t = currentMs - el.start_ms;
+    const dur = el.duration_ms || 2000;
+
+    if(el.type === 'stack' && msgMap[el.id]){
+      const m = msgMap[el.id];
+      const repeat = el.repeat || 1;
+      const step = el.step_ms || 200;
+      for(let i=0;i<repeat;i++){
+        const st = t - i*step;
+        if(st >= 0 && st < dur + ANIM_IN){
+          const clone = m.node.cloneNode(true);
+          clone.style.position = 'absolute';
+          const sideOff = (m.node.classList.contains('right') ? 1 : -1) * i * 25;
+          clone.style.left = (parseFloat(m.node.style.left || 0) + sideOff) + 'px';
+          clone.style.top = (m.y + i*45) + 'px';
+          clone.style.zIndex = 10 + i;
+          // v8 大动画：stack 每层带旋转弹入（更有冲击力）
+          const p = Math.min(1, st / ANIM_IN);
+          const e = easeOutBack(p);
+          const rotOff = (m.node.classList.contains('right') ? 1 : -1) * 8 * (1 - e);
+          clone.style.transform = `translateY(${-scrollY + (1-e)*40}px) scale(${0.6+0.4*e}) rotate(${rotOff}deg)`;
+          clone.style.opacity = String(e * 0.95);
+          msgsContainer.appendChild(clone);
+          setTimeout(()=>{ if(clone.parentNode) clone.parentNode.removeChild(clone); }, 50);
+        }
+      }
+    }
+
+    if(el.type === 'hook' && hookMap[el.id]){
+      if(t >= 0 && t < dur + 600){
+        // v8 大动画：hook 大弹性缩放 + 大幅倾斜（艺术感、幅度大）
+        const p = Math.min(1, t / 380);
+        const e = easeOutElastic(p);
+        const h = hookMap[el.id].node;
+        h.style.opacity = String(Math.min(1, e));
+        // 入场 -14° 大幅倾斜 → 回正 + 后续微抖；scale 0.3→1.15 超调
+        const hookRot = -14 * (1 - Math.min(1, t/300)) + Math.sin(t/90) * 1.5;
+        const hookScale = 0.3 + 0.85 * e;
+        h.style.transform = `translateY(-50%) scale(${hookScale}) rotate(${hookRot}deg)`;
+        dimOpacity = Math.max(dimOpacity, 0.5);
+      }
+    }
+
+    if(el.type === 'sticker' && stickerMap[el.id]){
+      if(t >= 0 && t < dur + 400){
+        const p = Math.min(1, t / 200);
+        const e = easeOutBack(p);
+        const s = stickerMap[el.id].node;
+        s.style.opacity = String(e);
+        // v7 抖音风：sticker 快速弹出 + 入场后持续微抖（角度来回飘）
+        const stickerRot = (1 - e) * -20 + Math.sin(t/120) * 4;
+        s.style.transform = `scale(${0.3+0.7*e}) rotate(${stickerRot}deg)`;
+      }
+    }
+
+    if(el.type === 'beam' && beamMap[el.id]){
+      if(t >= 0 && t < dur + 800){
+        const p = Math.min(1, t / 500);
+        const e = easeOutCubic(p);
+        const b = beamMap[el.id].node;
+        b.style.opacity = String(0.8 * e);
+        b.style.height = (500 * e) + 'px';
+      }
+    }
+
+    if(el.type === 'textzoom' && zoomMap[el.id]){
+      if(t >= 0 && t < dur + 500){
+        const p = Math.min(1, t / 300);
+        const e = easeOutBack(p);
+        const z = zoomMap[el.id].node;
+        z.style.opacity = String(e);
+        z.style.transform = `translateY(-50%) scale(${0.5+0.5*e})`;
+        dimOpacity = Math.max(dimOpacity, 0.35);
+      }
+    }
+
+    if(el.type === 'flash' && t >= 0 && t < dur){
+      const fb = document.querySelector('.flash-bar');
+      const p = t / dur;
+      const fade = Math.sin(p * Math.PI);
+      fb.style.height = (80 * fade) + 'px';
+      fb.style.opacity = String(fade);
+    }
+  });
+
+  applyDim();
+};
+
+window.renderAt(window.__CURRENT_MS__ || 0);
+</script>
+</body>
+</html>

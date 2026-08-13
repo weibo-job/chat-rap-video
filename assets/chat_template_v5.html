@@ -1,0 +1,579 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<style>
+:root{
+  --bg:#ededed;
+  --nav-bg:#ededed;
+  --bubble-left:#ffffff;
+  --bubble-right:#95ec69;
+  --text:#1a1a1a;
+  --text-sec:#888888;
+  --hook-yellow:#ffe600;
+  --beam-green:#7fff00;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-font-smoothing:antialiased;}
+html,body{
+  width:1080px;height:1920px;
+  overflow:hidden;background:#000;
+  font-family:-apple-system,"PingFang SC","Microsoft YaHei","Heiti SC",sans-serif;
+}
+#canvas{
+  width:1080px;height:1920px;
+  position:relative;overflow:hidden;
+  background:#000;
+}
+#camera{
+  position:absolute;left:0;top:0;
+  width:1080px;height:1920px;
+  transform-origin:center top;
+  will-change:transform;
+}
+#phone{
+  position:absolute;left:0;top:0;
+  width:1080px;
+  height:auto;
+  min-height:6200px;
+  background:var(--bg);
+  overflow:hidden;
+}
+
+/* 状态栏 */
+#status-bar{
+  position:absolute;left:0;right:0;top:0;height:56px;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 28px;
+  font-size:28px;font-weight:600;color:#000;
+  z-index:50;
+}
+#status-bar .time{font-size:30px;letter-spacing:1px;}
+#status-bar .icons{display:flex;align-items:center;gap:10px;}
+#status-bar .signal{display:flex;align-items:flex-end;gap:4px;height:22px;}
+#status-bar .signal i{display:block;width:7px;background:#000;border-radius:1px;}
+#status-bar .signal i:nth-child(1){height:7px;opacity:.35;}
+#status-bar .signal i:nth-child(2){height:11px;opacity:.55;}
+#status-bar .signal i:nth-child(3){height:15px;opacity:.75;}
+#status-bar .signal i:nth-child(4){height:19px;opacity:1;}
+#status-bar .wifi{width:30px;height:24px;position:relative;}
+#status-bar .wifi::before{content:"";position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:8px;height:8px;background:#000;border-radius:50%;}
+#status-bar .wifi::after{content:"";position:absolute;bottom:2px;left:50%;transform:translateX(-50%);width:26px;height:26px;border:4px solid #000;border-top-color:transparent;border-radius:50%;}
+#status-bar .battery{display:flex;align-items:center;gap:6px;}
+#status-bar .battery .case{width:32px;height:16px;border:2px solid #000;border-radius:3px;position:relative;padding:2px;}
+#status-bar .battery .case::after{content:"";position:absolute;right:-5px;top:50%;transform:translateY(-50%);width:3px;height:8px;background:#000;border-radius:0 1px 1px 0;}
+#status-bar .battery .fill{width:100%;height:100%;background:#000;border-radius:1px;}
+#status-bar .battery .num{font-size:24px;}
+
+/* 导航栏 */
+#nav-bar{
+  position:absolute;left:0;right:0;top:56px;height:100px;
+  background:var(--nav-bg);
+  display:flex;align-items:center;justify-content:center;
+  border-bottom:1px solid #d6d6d6;
+  z-index:50;
+}
+#nav-bar .back{position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:44px;color:#000;font-weight:300;width:70px;text-align:center;}
+#nav-bar .name{font-size:40px;color:#000;font-weight:600;max-width:720px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;}
+#nav-bar .more{position:absolute;right:24px;top:50%;transform:translateY(-50%);font-size:42px;color:#000;letter-spacing:3px;}
+
+/* 聊天区 */
+#messages{
+  position:absolute;left:0;right:0;top:156px;bottom:110px;
+  padding:30px 26px 60px 26px;
+}
+.msg{
+  position:absolute;
+  display:flex;align-items:flex-start;
+  opacity:0;
+  will-change:transform,opacity;
+  pointer-events:none;
+}
+.msg.left{left:26px;}
+.msg.right{right:26px;flex-direction:row-reverse;}
+.msg .avatar{
+  width:84px;height:84px;border-radius:12px;
+  background:#d9d9d9;flex:none;
+  background-size:cover;background-position:center;
+}
+.msg.left .avatar{margin-right:18px;}
+.msg.right .avatar{margin-left:18px;}
+.msg .bubble{
+  padding:20px 24px;
+  font-size:34px;line-height:1.45;font-weight:400;
+  position:relative;
+  max-width:720px;word-break:break-word;white-space:pre-wrap;
+  box-shadow:0 1px 2px rgba(0,0,0,0.06);
+}
+.msg.left .bubble{background:var(--bubble-left);color:var(--text);border-radius:12px 16px 16px 16px;}
+.msg.left .bubble::before{content:"";position:absolute;left:-10px;top:26px;border:8px solid transparent;border-right-color:var(--bubble-left);}
+.msg.right .bubble{background:var(--bubble-right);color:var(--text);border-radius:16px 12px 16px 16px;}
+.msg.right .bubble::after{content:"";position:absolute;right:-10px;top:26px;border:8px solid transparent;border-left-color:var(--bubble-right);}
+
+/* 输入栏 */
+#input-bar{
+  position:absolute;left:0;right:0;bottom:0;height:110px;
+  background:#f7f7f7;
+  display:flex;align-items:center;gap:18px;
+  padding:0 24px;
+  border-top:1px solid #e0e0e0;
+}
+#input-bar .voice-btn{width:66px;height:66px;border-radius:50%;border:2px solid #888;display:flex;align-items:center;justify-content:center;font-size:32px;color:#555;}
+#input-bar .input-box{flex:1;height:66px;background:#fff;border-radius:8px;border:1px solid #ddd;}
+#input-bar .emoji{width:56px;height:56px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:38px;color:#555;}
+#input-bar .plus{width:56px;height:56px;border-radius:50%;border:2px solid #888;display:flex;align-items:center;justify-content:center;font-size:40px;color:#555;}
+
+/* 遮罩变暗 */
+#dim{
+  position:absolute;left:0;right:0;top:0;bottom:0;
+  background:rgba(0,0,0,0);
+  pointer-events:none;z-index:80;
+  transition:background 0.12s ease;
+}
+
+/* hook 黄色大字 */
+.hook{
+  position:absolute;
+  left:0;right:0;top:45%;
+  text-align:center;
+  font-size:260px;font-weight:900;
+  color:var(--hook-yellow);
+  text-shadow:
+    -7px -7px 0 #000, 7px -7px 0 #000,
+    -7px 7px 0 #000, 7px 7px 0 #000,
+    0 0 60px rgba(0,0,0,0.95);
+  opacity:0;
+  letter-spacing:-10px;
+  pointer-events:none;
+  white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis;
+  padding:0 40px;
+  transform:translateY(-50%) scale(0.4);
+  z-index:100;
+}
+
+/* 表情包 sticker */
+.sticker{
+  position:absolute;
+  width:360px;height:360px;
+  opacity:0;
+  pointer-events:none;
+  transform:scale(0.3);
+  z-index:90;
+  background-size:contain;background-repeat:no-repeat;background-position:center;
+}
+
+/* 绿色光柱 */
+.light-beam{
+  position:absolute;
+  left:50%;bottom:0;
+  width:200px;height:0;
+  transform:translateX(-50%);
+  background:linear-gradient(to top, rgba(127,255,0,0.9), rgba(127,255,0,0));
+  filter:blur(20px);
+  opacity:0;
+  pointer-events:none;z-index:70;
+}
+
+/* 文字特写层 */
+.text-zoom{
+  position:absolute;
+  left:0;right:0;top:50%;
+  text-align:center;
+  font-size:180px;font-weight:900;
+  color:var(--text);
+  opacity:0;
+  pointer-events:none;
+  transform:translateY(-50%) scale(0.5);
+  z-index:95;
+}
+.text-zoom.left{color:#fff;text-shadow:0 4px 20px rgba(0,0,0,0.5);}
+.text-zoom.right{color:#95ec69;text-shadow:0 4px 20px rgba(0,0,0,0.5);}
+
+/* 残影/重影 */
+.ghost{
+  position:absolute;
+  opacity:0;
+  pointer-events:none;
+  z-index:60;
+}
+
+/* 白条转场 */
+.flash-bar{
+  position:absolute;left:-200px;right:-200px;top:50%;
+  height:0;background:#fff;
+  transform:translateY(-50%) rotate(-5deg);
+  opacity:0;pointer-events:none;z-index:200;
+}
+</style>
+</head>
+<body>
+<div id="canvas">
+  <div id="camera">
+    <div id="phone">
+      <div id="status-bar">
+        <div class="time">18:58</div>
+        <div class="icons">
+          <div class="signal"><i></i><i></i><i></i><i></i></div>
+          <div class="wifi"></div>
+          <div class="battery"><div class="case"><div class="fill"></div></div><div class="num">78</div></div>
+        </div>
+      </div>
+      <div id="nav-bar">
+        <span class="back">&lt;</span>
+        <span class="name"></span>
+        <span class="more">···</span>
+      </div>
+      <div id="messages"></div>
+      <div id="input-bar">
+        <div class="voice-btn">·</div>
+        <div class="input-box"></div>
+        <div class="emoji">☺</div>
+        <div class="plus">+</div>
+      </div>
+    </div>
+  </div>
+  <div id="dim"></div>
+  <div id="overlays"></div>
+  <div class="flash-bar"></div>
+</div>
+
+<script>
+const SCRIPT = window.__SCRIPT__ || {};
+const ASSETS = window.__ASSETS__ || {};
+const HEADER = SCRIPT.header || {back:'<', name:'专家老张'};
+const AVATARS = SCRIPT.avatars || {};
+const CHARACTERS = {};
+(SCRIPT.characters || []).forEach(c => CHARACTERS[c.id] = c);
+
+// 设置标题
+const nameEl = document.querySelector('#nav-bar .name');
+if(nameEl) nameEl.textContent = HEADER.name || '专家老张';
+// 设置状态栏时间（剧本 statusTime 覆盖）
+const timeEl = document.querySelector('#status-bar .time');
+if(timeEl && SCRIPT.statusTime) timeEl.textContent = SCRIPT.statusTime;
+const batteryEl = document.querySelector('#status-bar .battery .num');
+if(batteryEl && SCRIPT.battery) batteryEl.textContent = SCRIPT.battery;
+
+// 设置头像
+function setAvatar(el, charId){
+  const src = ASSETS[AVATARS[charId]];
+  if(src) el.style.backgroundImage = `url(${src})`;
+  else el.textContent = (CHARACTERS[charId] && CHARACTERS[charId].name ? CHARACTERS[charId].name[0] : '?');
+}
+
+// 创建消息元素
+const msgMap = {};
+const msgsContainer = document.getElementById('messages');
+const elements = SCRIPT.elements || [];
+
+// 消息垂直间距
+const MSG_START_Y = 60;
+const MSG_GAP = 420;
+let msgIndex = 0;
+
+const bubbleList = [];
+elements.forEach(el => {
+  if(el.type === 'bubble' || el.type === 'stack'){
+    const char = CHARACTERS[el.from] || {side:'left'};
+    const side = char.side || 'left';
+    const div = document.createElement('div');
+    div.className = `msg ${side}`;
+    div.style.top = (MSG_START_Y + msgIndex * MSG_GAP) + 'px';
+    div.dataset.y = MSG_START_Y + msgIndex * MSG_GAP;
+    div.dataset.focusY = (MSG_START_Y + msgIndex * MSG_GAP) + 60;
+    div.innerHTML = `
+      <div class="avatar"></div>
+      <div class="bubble">${el.text || ''}</div>
+    `;
+    setAvatar(div.querySelector('.avatar'), el.from);
+    msgsContainer.appendChild(div);
+    msgMap[el.id] = {el:el, node:div, y:MSG_START_Y + msgIndex * MSG_GAP, focusY:MSG_START_Y + msgIndex * MSG_GAP + 60};
+    bubbleList.push({id:el.id, node:div, y:MSG_START_Y + msgIndex * MSG_GAP, focusY:MSG_START_Y + msgIndex * MSG_GAP + 60, side:side});
+    el._msgIndex = msgIndex;
+    msgIndex++;
+  }
+});
+
+// 根据消息数量动态撑高 #phone（支持 120s 长剧本 25-35 条消息）
+(function(){
+  const phone = document.getElementById('phone');
+  const totalMsgs = msgIndex;
+  // 消息区 top=156px(状态栏+导航栏) bottom=110px(输入栏)，消息从 y=60 起每 420px 一条
+  const lastY = (totalMsgs > 0) ? (MSG_START_Y + (totalMsgs-1) * MSG_GAP + 200) : 600;
+  phone.style.height = Math.max(6200, lastY + 156 + 110) + 'px';
+})();
+
+const overlays = document.getElementById('overlays');
+const hookMap = {};
+const stickerMap = {};
+const beamMap = {};
+const zoomMap = {};
+
+elements.forEach(el => {
+  if(el.type === 'hook'){
+    const div = document.createElement('div');
+    div.className = 'hook';
+    div.textContent = el.text || '';
+    overlays.appendChild(div);
+    hookMap[el.id] = {el:el, node:div};
+  } else if(el.type === 'sticker'){
+    const div = document.createElement('div');
+    div.className = 'sticker';
+    const src = ASSETS[el.src];
+    if(src){
+      div.style.backgroundImage = `url(${src})`;
+    } else if(el.emoji){
+      div.textContent = el.emoji;
+      div.style.display = 'flex';
+      div.style.alignItems = 'center';
+      div.style.justifyContent = 'center';
+      div.style.fontSize = (el.emojiSize || 220) + 'px';
+      div.style.lineHeight = '1';
+    }
+    div.style.left = (el.x !== undefined ? el.x : 120) + 'px';
+    div.style.top = (el.y !== undefined ? el.y : 200) + 'px';
+    overlays.appendChild(div);
+    stickerMap[el.id] = {el:el, node:div};
+  } else if(el.type === 'beam'){
+    const div = document.createElement('div');
+    div.className = 'light-beam';
+    overlays.appendChild(div);
+    beamMap[el.id] = {el:el, node:div};
+  } else if(el.type === 'textzoom'){
+    const div = document.createElement('div');
+    div.className = 'text-zoom ' + (el.side || 'left');
+    div.textContent = el.text || '';
+    overlays.appendChild(div);
+    zoomMap[el.id] = {el:el, node:div};
+  }
+});
+
+// 相机参数
+let camScale = 1.0;
+let camOffsetY = 0;
+let camOffsetX = 0;
+let camShakeX = 0;
+let camShakeY = 0;
+let dimOpacity = 0;
+
+function applyCamera(){
+  const camera = document.getElementById('camera');
+  const sx = (camShakeX || 0) + camOffsetX;
+  const sy = (camShakeY || 0) + camOffsetY;
+  camera.style.transform = `translate(${sx}px, ${sy}px) scale(${camScale})`;
+  const dim = document.getElementById('dim');
+  if(dim) dim.style.background = `rgba(0,0,0,${dimOpacity})`;
+}
+
+// 缓动
+function easeOutBack(t){ const c1=1.70158,c3=c1+1; return 1+c3*Math.pow(t-1,3)+c1*Math.pow(t-1,2); }
+function easeOutCubic(t){ return 1-Math.pow(1-t,3); }
+function easeOutElastic(t){ const c4=(2*Math.PI)/3; return t===0?0:t===1?1:Math.pow(2,-10*t)*Math.sin((t*10-0.75)*c4)+1; }
+
+function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
+
+function lerp(a,b,t){ return a+(b-a)*t; }
+
+// 当前激活的消息索引
+let activeMsgIndex = -1;
+
+function setCameraForMsg(msgIdx, mode, overrideScale){
+  if(msgIdx < 0 || msgIdx >= bubbleList.length) return;
+  const b = bubbleList[msgIdx];
+  const focusY = b.focusY;
+  const side = b.side;
+  let targetScale = 1.2;
+  let targetScreenY = 1000; // 镜头焦点：屏幕中部
+  if(mode === 'full'){ targetScale = 0.32; targetScreenY = 960; } // 完整界面：按 phone 高度算的小 scale 让 6200px phone 显示完整
+  else if(mode === 'bubble'){ targetScale = 1.35; targetScreenY = 1000; }
+  else if(mode === 'text'){ targetScale = 1.55; targetScreenY = 1000; }
+  if(overrideScale) targetScale = overrideScale;
+  // 让 focusY 对准 targetScreenY
+  camScale = targetScale;
+  camOffsetY = targetScreenY - focusY * targetScale;
+  // 根据消息方向偏移，避免裁切
+  camOffsetX = (side === 'right') ? -220 : 220;
+}
+
+// 震动
+function getShake(energy, t){
+  if(t < 0) return {x:0,y:0};
+  const dur = 200;
+  if(t > dur) return {x:0,y:0};
+  const p = t/dur;
+  const amp = energy * 18 * (1-p);
+  return {x:(Math.random()-0.5)*amp, y:(Math.random()-0.5)*amp};
+}
+
+const ANIM_IN = 160;
+
+window.renderAt = function(currentMs){
+  // 重置所有元素
+  elements.forEach(el => {
+    if(el.type === 'bubble' && msgMap[el.id]){
+      msgMap[el.id].node.style.opacity = '0';
+      msgMap[el.id].node.style.transform = 'translateY(30px) scale(0.8)';
+    }
+  });
+  Object.values(hookMap).forEach(h => {
+    h.node.style.opacity = '0';
+    h.node.style.transform = 'translateY(-50%) scale(0.4)';
+  });
+  Object.values(stickerMap).forEach(s => {
+    s.node.style.opacity = '0';
+    s.node.style.transform = 'scale(0.3) rotate(-20deg)';
+  });
+  Object.values(beamMap).forEach(b => {
+    b.node.style.opacity = '0';
+    b.node.style.height = '0';
+  });
+  Object.values(zoomMap).forEach(z => {
+    z.node.style.opacity = '0';
+    z.node.style.transform = 'translateY(-50%) scale(0.5)';
+  });
+
+  // 默认相机
+  camScale = 1.0;
+  camOffsetY = 0;
+  camOffsetX = 0;
+  dimOpacity = 0;
+  camShakeX = 0;
+  camShakeY = 0;
+
+  // 找当前激活的主消息（最新的一个 bubble/stack）
+  let lastActiveMsgIdx = -1;
+  let activeEl = null;
+  let activeElT = -Infinity;
+  const activeBubbleIds = new Set();
+
+  elements.forEach(el => {
+    const t = currentMs - el.start_ms;
+    const dur = el.duration_ms || 2000;
+    if((el.type === 'bubble' || el.type === 'stack') && msgMap[el.id] && t >= 0 && t < dur + ANIM_IN + 300){
+      if(el.start_ms > activeElT){
+        activeElT = el.start_ms;
+        activeEl = el;
+        lastActiveMsgIdx = el._msgIndex;
+      }
+    }
+  });
+  if(activeEl) activeBubbleIds.add(activeEl.id);
+
+  elements.forEach(el => {
+    const t = currentMs - el.start_ms;
+    const dur = el.duration_ms || 2000;
+
+    if(el.type === 'bubble' && msgMap[el.id]){
+      if(!activeBubbleIds.has(el.id)) return;
+      const m = msgMap[el.id];
+      if(t >= 0){
+        const p = Math.min(1, t / ANIM_IN);
+        const e = easeOutBack(p);
+        m.node.style.opacity = String(e);
+        const side = m.node.classList.contains('right') ? 1 : -1;
+        m.node.style.transform = `translateX(${side*(1-e)*40}px) translateY(${(1-e)*50}px) scale(${0.8+0.2*e})`;
+      }
+    }
+
+    if(el.type === 'stack' && msgMap[el.id]){
+      if(!activeBubbleIds.has(el.id)) return;
+      const m = msgMap[el.id];
+      const repeat = el.repeat || 1;
+      const step = el.step_ms || 200;
+      for(let i=0;i<repeat;i++){
+        const st = t - i*step;
+        if(st >= 0 && st < dur + ANIM_IN){
+          const clone = m.node.cloneNode(true);
+          clone.style.position = 'absolute';
+          const sideOff = (m.node.classList.contains('right') ? 1 : -1) * i * 25;
+          clone.style.left = (parseFloat(m.node.style.left || 0) + sideOff) + 'px';
+          clone.style.top = (m.y + i*45) + 'px';
+          clone.style.zIndex = 10 + i;
+          const p = Math.min(1, st / ANIM_IN);
+          const e = easeOutBack(p);
+          clone.style.opacity = String(e * 0.95);
+          clone.style.transform = `translateY(${(1-e)*40}px) scale(${0.85+0.15*e})`;
+          msgsContainer.appendChild(clone);
+          setTimeout(()=>{ if(clone.parentNode) clone.parentNode.removeChild(clone); }, 50);
+        }
+      }
+    }
+
+    if(el.type === 'hook' && hookMap[el.id]){
+      if(t >= 0 && t < dur + 600){
+        const p = Math.min(1, t / 350);
+        const e = easeOutElastic(p);
+        const h = hookMap[el.id].node;
+        h.style.opacity = String(Math.min(1, e));
+        h.style.transform = `translateY(-50%) scale(${0.4+0.6*e})`;
+        dimOpacity = Math.max(dimOpacity, 0.55);
+      }
+    }
+
+    if(el.type === 'sticker' && stickerMap[el.id]){
+      if(t >= 0 && t < dur + 400){
+        const p = Math.min(1, t / 280);
+        const e = easeOutBack(p);
+        const s = stickerMap[el.id].node;
+        s.style.opacity = String(e);
+        s.style.transform = `scale(${0.3+0.7*e}) rotate(${(1-e)*-20}deg)`;
+      }
+    }
+
+    if(el.type === 'beam' && beamMap[el.id]){
+      if(t >= 0 && t < dur + 800){
+        const p = Math.min(1, t / 500);
+        const e = easeOutCubic(p);
+        const b = beamMap[el.id].node;
+        b.style.opacity = String(0.8 * e);
+        b.style.height = (1200 * e) + 'px';
+      }
+    }
+
+    if(el.type === 'textzoom' && zoomMap[el.id]){
+      if(t >= 0 && t < dur + 500){
+        const p = Math.min(1, t / 300);
+        const e = easeOutBack(p);
+        const z = zoomMap[el.id].node;
+        z.style.opacity = String(e);
+        z.style.transform = `translateY(-50%) scale(${0.5+0.5*e})`;
+        dimOpacity = Math.max(dimOpacity, 0.4);
+      }
+    }
+
+    // 震动
+    if(t >= 0 && t < 150 && el.beat_energy){
+      const sh = getShake(el.beat_energy, t);
+      camShakeX = sh.x;
+      camShakeY = sh.y;
+    }
+  });
+
+  // 应用相机
+  // 如果当前有元素指定了 camera_mode
+  let camSet = false;
+  elements.forEach(el => {
+    const t = currentMs - el.start_ms;
+    if(t >= 0 && t < (el.duration_ms || 2000) + ANIM_IN + 200){
+      if(el.camera_mode || el.camera_scale){
+        let mode = el.camera_mode || 'bubble';
+        let scale = el.camera_scale;
+        if(msgMap[el.id]){
+          setCameraForMsg(el._msgIndex, mode, scale);
+          camSet = true;
+        }
+      }
+    }
+  });
+
+  if(!camSet && lastActiveMsgIdx >= 0){
+    setCameraForMsg(lastActiveMsgIdx, 'bubble');
+  }
+
+  applyCamera();
+};
+
+window.renderAt(window.__CURRENT_MS__ || 0);
+</script>
+</body>
+</html>

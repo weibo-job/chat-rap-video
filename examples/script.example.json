@@ -1,0 +1,25 @@
+{
+  "title": "Cheap Streamer vs Stingy Boss",
+  "header": {"back": "<", "name": "The Boss"},
+  "characters": [
+    {"id": "boss", "side": "left", "name": "Boss"},
+    {"id": "me", "side": "right", "name": "Me (Streamer)"}
+  ],
+  "avatars": {"boss": "boss.png", "me": "me.png"},
+  "elements": [
+    {"id": "e1", "type": "bubble", "from": "boss", "text": "在？ 新号播了一个月了吧", "start_ms": 1200, "duration_ms": 2000, "emotion": "normal", "camera_mode": "bubble"},
+    {"id": "e2", "type": "bubble", "from": "me", "text": "稳步推进中！", "start_ms": 3400, "duration_ms": 1700, "emotion": "excited", "camera_mode": "bubble"},
+    {"id": "e3", "type": "bubble", "from": "boss", "text": "推进？ 直播间在线人数多少", "start_ms": 5300, "duration_ms": 2400, "emotion": "normal", "camera_mode": "bubble"},
+    {"id": "h1", "type": "hook", "text": "推进？", "start_ms": 5500, "duration_ms": 1600},
+    {"id": "e4", "type": "bubble", "from": "me", "text": "七十多", "start_ms": 7900, "duration_ms": 1400, "emotion": "sad", "camera_mode": "bubble"},
+    {"id": "e5", "type": "bubble", "from": "boss", "text": "播了三十天 在线不过百？", "start_ms": 9500, "duration_ms": 2300, "emotion": "angry", "camera_mode": "text"},
+    {"id": "e6", "type": "bubble", "from": "me", "text": "老板您听我说 这叫厚积薄发！", "start_ms": 12000, "duration_ms": 2400, "emotion": "laugh", "camera_mode": "bubble"},
+    {"id": "s1", "type": "sticker", "src": "meme_panda_shock.png", "start_ms": 12200, "x": 620, "y": 180, "duration_ms": 2000},
+    {"id": "e7", "type": "bubble", "from": "boss", "text": "你一个月佣金连一百都上不去", "start_ms": 14600, "duration_ms": 2600, "emotion": "angry", "camera_mode": "bubble"},
+    {"id": "e8", "type": "bubble", "from": "boss", "text": "再这样下去 底薪改发优惠券", "start_ms": 17400, "duration_ms": 2500, "emotion": "normal", "camera_mode": "bubble"},
+    {"id": "e9", "type": "bubble", "from": "me", "text": "我3000包月 本来就是便宜主播", "start_ms": 20100, "duration_ms": 2500, "emotion": "laugh", "camera_mode": "text"},
+    {"id": "h2", "type": "hook", "text": "便宜主播", "start_ms": 20300, "duration_ms": 1800},
+    {"id": "e10", "type": "stack", "from": "boss", "text": "行你也别说了", "start_ms": 22800, "repeat": 3, "step_ms": 180, "duration_ms": 2800, "emotion": "normal", "camera_mode": "bubble"},
+    {"id": "h3", "type": "hook", "text": "散会！", "start_ms": 24000, "duration_ms": 2200}
+  ]
+}

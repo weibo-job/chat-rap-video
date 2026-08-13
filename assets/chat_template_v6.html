@@ -1,0 +1,637 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<style>
+:root{
+  --bg:#ededed;
+  --nav-bg:#ededed;
+  --bubble-left:#ffffff;
+  --bubble-right:#95ec69;
+  --text:#1a1a1a;
+  --hook-yellow:#ffe600;
+  --beam-green:#7fff00;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-font-smoothing:antialiased;}
+html,body{
+  width:1080px;height:1920px;
+  overflow:hidden;background:#000;
+  font-family:-apple-system,"PingFang SC","Microsoft YaHei","Heiti SC",sans-serif;
+}
+#canvas{
+  width:1080px;height:1920px;
+  position:relative;overflow:hidden;
+  background:#000;
+}
+
+/* 聊天窗：固定居中，占总画面 ~52%（用户要求 40-60%） */
+#phone{
+  position:absolute;left:0;top:460px;
+  width:1080px;height:1000px;
+  background:var(--bg);
+  overflow:hidden;
+}
+
+/* 状态栏 */
+#status-bar{
+  position:absolute;left:0;right:0;top:0;height:56px;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 28px;
+  font-size:28px;font-weight:600;color:#000;
+  z-index:50;
+  transition:opacity 0.5s ease, transform 0.5s ease;
+}
+#status-bar .time{font-size:30px;letter-spacing:1px;}
+#status-bar .icons{display:flex;align-items:center;gap:10px;}
+#status-bar .signal{display:flex;align-items:flex-end;gap:4px;height:22px;}
+#status-bar .signal i{display:block;width:7px;background:#000;border-radius:1px;}
+#status-bar .signal i:nth-child(1){height:7px;opacity:.35;}
+#status-bar .signal i:nth-child(2){height:11px;opacity:.55;}
+#status-bar .signal i:nth-child(3){height:15px;opacity:.75;}
+#status-bar .signal i:nth-child(4){height:19px;opacity:1;}
+#status-bar .wifi{width:30px;height:24px;position:relative;}
+#status-bar .wifi::before{content:"";position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:8px;height:8px;background:#000;border-radius:50%;}
+#status-bar .wifi::after{content:"";position:absolute;bottom:2px;left:50%;transform:translateX(-50%);width:26px;height:26px;border:4px solid #000;border-top-color:transparent;border-radius:50%;}
+#status-bar .battery{display:flex;align-items:center;gap:6px;}
+#status-bar .battery .case{width:32px;height:16px;border:2px solid #000;border-radius:3px;position:relative;padding:2px;}
+#status-bar .battery .case::after{content:"";position:absolute;right:-5px;top:50%;transform:translateY(-50%);width:3px;height:8px;background:#000;border-radius:0 1px 1px 0;}
+#status-bar .battery .fill{width:100%;height:100%;background:#000;border-radius:1px;}
+#status-bar .battery .num{font-size:24px;}
+
+/* 导航栏 */
+#nav-bar{
+  position:absolute;left:0;right:0;top:56px;height:100px;
+  background:var(--nav-bg);
+  display:flex;align-items:center;justify-content:center;
+  border-bottom:1px solid #d6d6d6;
+  z-index:50;
+  transition:opacity 0.5s ease, transform 0.5s ease;
+}
+#nav-bar .back{position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:44px;color:#000;font-weight:300;width:70px;text-align:center;}
+#nav-bar .name{font-size:40px;color:#000;font-weight:600;max-width:720px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;}
+#nav-bar .more{position:absolute;right:24px;top:50%;transform:translateY(-50%);font-size:42px;color:#000;letter-spacing:3px;}
+
+/* 消息滚动容器（模拟微信向上滚动，z-index:0 确保不盖 #nav-bar） */
+#messages{
+  position:absolute;left:0;right:0;top:156px;bottom:110px;
+  overflow:hidden;
+  z-index:0;
+}
+.msg{
+  position:absolute;left:0;right:0;
+  display:flex;align-items:flex-start;
+  opacity:0;
+  will-change:transform,opacity;
+  pointer-events:none;
+  /* 不用 CSS transition：renderAt 每帧重置 opacity 会导致每帧都在过渡中，截图时几乎不可见 */
+}
+.msg.left .row{flex-direction:row;}
+.msg .row{display:flex;align-items:flex-start;width:100%;padding:0 26px;}
+.msg.right .row{flex-direction:row-reverse;}
+.msg .avatar{
+  width:126px;height:126px;border-radius:16px;
+  background:#d9d9d9;flex:none;
+  background-size:cover;background-position:center;
+}
+.msg.left .avatar{margin-right:26px;}
+.msg.right .avatar{margin-left:26px;}
+.msg .bubble{
+  padding:30px 38px;
+  font-size:50px;line-height:1.4;font-weight:500;
+  position:relative;
+  max-width:920px;word-break:break-word;white-space:pre-wrap;
+  box-shadow:0 2px 4px rgba(0,0,0,0.08);
+}
+.msg.left .bubble{background:var(--bubble-left);color:var(--text);border-radius:12px 16px 16px 16px;}
+.msg.left .bubble::before{content:"";position:absolute;left:-10px;top:26px;border:8px solid transparent;border-right-color:var(--bubble-left);}
+.msg.right .bubble{background:var(--bubble-right);color:var(--text);border-radius:16px 12px 16px 16px;}
+.msg.right .bubble::after{content:"";position:absolute;right:-10px;top:26px;border:8px solid transparent;border-left-color:var(--bubble-right);}
+
+/* 输入栏 */
+#input-bar{
+  position:absolute;left:0;right:0;bottom:0;height:110px;
+  background:#f7f7f7;
+  display:flex;align-items:center;gap:18px;
+  padding:0 24px;
+  border-top:1px solid #e0e0e0;
+  transition:opacity 0.5s ease, transform 0.5s ease;
+}
+
+/* 开场 3-5s 后隐藏 UI（用户 2026-08-11 定稿：只留头像+气泡消息条） */
+.ui-hidden{ opacity:0 !important; transform:translateY(-40px); pointer-events:none; }
+#input-bar.ui-hidden{ transform:translateY(40px); }
+#input-bar .voice-btn{width:66px;height:66px;border-radius:50%;border:2px solid #888;display:flex;align-items:center;justify-content:center;font-size:32px;color:#555;}
+#input-bar .input-box{flex:1;height:66px;background:#fff;border-radius:8px;border:1px solid #ddd;}
+#input-bar .emoji{width:56px;height:56px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:38px;color:#555;}
+#input-bar .plus{width:56px;height:56px;border-radius:50%;border:2px solid #888;display:flex;align-items:center;justify-content:center;font-size:40px;color:#555;}
+
+/* 遮罩变暗 */
+#dim{
+  position:absolute;left:0;right:0;top:0;bottom:0;
+  background:rgba(0,0,0,0);
+  pointer-events:none;z-index:80;
+}
+
+/* hook 大黄字：上方重点信息区（下移，top 240 附近） */
+.hook{
+  position:absolute;
+  left:0;right:0;top:240px;
+  text-align:center;
+  font-size:230px;font-weight:900;
+  color:var(--hook-yellow);
+  text-shadow:
+    -7px -7px 0 #000, 7px -7px 0 #000,
+    -7px 7px 0 #000, 7px 7px 0 #000,
+    0 0 60px rgba(0,0,0,0.95);
+  opacity:0;
+  letter-spacing:-8px;
+  pointer-events:none;
+  white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis;
+  padding:0 40px;
+  transform:translateY(-50%) scale(0.4);
+  z-index:100;
+}
+
+/* 表情包 sticker：上方动画区（y 由剧本 150-550） */
+.sticker{
+  position:absolute;
+  width:320px;height:320px;
+  opacity:0;
+  pointer-events:none;
+  transform:scale(0.3);
+  z-index:90;
+  background-size:contain;background-repeat:no-repeat;background-position:center;
+}
+
+/* 绿色光柱：上方重点区降下 */
+.light-beam{
+  position:absolute;
+  left:50%;top:200px;
+  width:180px;height:0;
+  transform:translateX(-50%);
+  background:linear-gradient(to bottom, rgba(127,255,0,0.9), rgba(127,255,0,0));
+  filter:blur(18px);
+  opacity:0;
+  pointer-events:none;z-index:70;
+}
+
+/* 文字特写层：上方重点信息区 */
+.text-zoom{
+  position:absolute;
+  left:0;right:0;top:330px;
+  text-align:center;
+  font-size:170px;font-weight:900;
+  color:var(--text);
+  opacity:0;
+  pointer-events:none;
+  transform:translateY(-50%) scale(0.5);
+  z-index:95;
+}
+.text-zoom.left{color:#fff;text-shadow:0 4px 20px rgba(0,0,0,0.5);}
+.text-zoom.right{color:#95ec69;text-shadow:0 4px 20px rgba(0,0,0,0.5);}
+
+/* 白条转场 */
+.flash-bar{
+  position:absolute;left:-200px;right:-200px;top:50%;
+  height:0;background:#fff;
+  transform:translateY(-50%) rotate(-5deg);
+  opacity:0;pointer-events:none;z-index:200;
+}
+
+/* 字幕层（用户 2026-08-11 定稿）：说唱歌词字幕 = 聊天文字，每条 ≤15 字；上移到聊天框下方 */
+#subtitle{
+  position:absolute;left:0;right:0;bottom:340px;
+  text-align:center;
+  font-size:60px;font-weight:800;
+  color:#ffffff;
+  text-shadow:
+    -4px -4px 0 #000, 4px -4px 0 #000,
+    -4px 4px 0 #000, 4px 4px 0 #000,
+    0 0 24px rgba(0,0,0,0.9);
+  opacity:0;
+  pointer-events:none;
+  z-index:110;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  padding:0 60px;
+  letter-spacing:2px;
+}
+</style>
+</head>
+<body>
+<div id="canvas">
+  <div id="phone">
+    <div id="status-bar">
+      <div class="time">18:58</div>
+      <div class="icons">
+        <div class="signal"><i></i><i></i><i></i><i></i></div>
+        <div class="wifi"></div>
+        <div class="battery"><div class="case"><div class="fill"></div></div><div class="num">78</div></div>
+      </div>
+    </div>
+    <div id="nav-bar">
+      <span class="back">&lt;</span>
+      <span class="name"></span>
+      <span class="more">···</span>
+    </div>
+    <div id="messages"></div>
+    <div id="input-bar">
+      <div class="voice-btn">·</div>
+      <div class="input-box"></div>
+      <div class="emoji">☺</div>
+      <div class="plus">+</div>
+    </div>
+  </div>
+  <div id="dim"></div>
+  <div id="overlays"></div>
+  <div class="flash-bar"></div>
+  <div id="subtitle"></div>
+</div>
+
+<script>
+const SCRIPT = window.__SCRIPT__ || {};
+const ASSETS = window.__ASSETS__ || {};
+const HEADER = SCRIPT.header || {back:'<', name:'专家老张'};
+const AVATARS = SCRIPT.avatars || {};
+const CHARACTERS = {};
+(SCRIPT.characters || []).forEach(c => CHARACTERS[c.id] = c);
+
+// 设置标题
+const nameEl = document.querySelector('#nav-bar .name');
+if(nameEl) nameEl.textContent = HEADER.name || '专家老张';
+// 设置状态栏时间（剧本 statusTime 覆盖）
+const timeEl = document.querySelector('#status-bar .time');
+if(timeEl && SCRIPT.statusTime) timeEl.textContent = SCRIPT.statusTime;
+const batteryEl = document.querySelector('#status-bar .battery .num');
+if(batteryEl && SCRIPT.battery) batteryEl.textContent = SCRIPT.battery;
+
+// 设置头像
+function setAvatar(el, charId){
+  const src = ASSETS[AVATARS[charId]];
+  if(src) el.style.backgroundImage = `url(${src})`;
+  else el.textContent = (CHARACTERS[charId] && CHARACTERS[charId].name ? CHARACTERS[charId].name[0] : '?');
+}
+
+// 创建消息元素
+const msgMap = {};
+const msgsContainer = document.getElementById('messages');
+const elements = SCRIPT.elements || [];
+
+// 消息在聊天窗内从上往下排列（模拟微信滚动记录，聊天条放大 1.5x 后间距加大）
+const MSG_START_Y = 60;
+const MSG_GAP = 260;
+let msgIndex = 0;
+const bubbleList = [];
+
+elements.forEach(el => {
+  if(el.type === 'bubble' || el.type === 'stack'){
+    const char = CHARACTERS[el.from] || {side:'left'};
+    const side = char.side || 'left';
+    const div = document.createElement('div');
+    div.className = `msg ${side}`;
+    const y = MSG_START_Y + msgIndex * MSG_GAP;
+    div.style.position = 'absolute';
+    div.style.left = '0';
+    div.style.right = '0';
+    div.style.top = y + 'px';
+    div.innerHTML = `<div class="row"><div class="avatar"></div><div class="bubble">${el.text || ''}</div></div>`;
+    setAvatar(div.querySelector('.avatar'), el.from);
+    msgsContainer.appendChild(div);
+    msgMap[el.id] = {el:el, node:div, y:y};
+    bubbleList.push({id:el.id, node:div, y:y, side:side});
+    el._msgIndex = msgIndex;
+    msgIndex++;
+  }
+});
+
+const overlays = document.getElementById('overlays');
+const hookMap = {};
+const stickerMap = {};
+const beamMap = {};
+const zoomMap = {};
+
+elements.forEach(el => {
+  if(el.type === 'hook'){
+    const div = document.createElement('div');
+    div.className = 'hook';
+    div.textContent = el.text || '';
+    overlays.appendChild(div);
+    hookMap[el.id] = {el:el, node:div};
+  } else if(el.type === 'sticker'){
+    const div = document.createElement('div');
+    div.className = 'sticker';
+    const src = ASSETS[el.src];
+    if(src){
+      div.style.backgroundImage = `url(${src})`;
+    } else if(el.emoji){
+      div.textContent = el.emoji;
+      div.style.display = 'flex';
+      div.style.alignItems = 'center';
+      div.style.justifyContent = 'center';
+      div.style.fontSize = (el.emojiSize || 200) + 'px';
+      div.style.lineHeight = '1';
+    }
+    div.style.left = (el.x !== undefined ? el.x : 100) + 'px';
+    div.style.top = (el.y !== undefined ? el.y : 300) + 'px';
+    overlays.appendChild(div);
+    stickerMap[el.id] = {el:el, node:div};
+  } else if(el.type === 'beam'){
+    const div = document.createElement('div');
+    div.className = 'light-beam';
+    overlays.appendChild(div);
+    beamMap[el.id] = {el:el, node:div};
+  } else if(el.type === 'textzoom'){
+    const div = document.createElement('div');
+    div.className = 'text-zoom ' + (el.side || 'left');
+    div.textContent = el.text || '';
+    overlays.appendChild(div);
+    zoomMap[el.id] = {el:el, node:div};
+  }
+});
+
+let dimOpacity = 0;
+function applyDim(){
+  const dim = document.getElementById('dim');
+  if(dim) dim.style.background = `rgba(0,0,0,${dimOpacity})`;
+}
+
+// 情绪 + 动态大小引擎（用户 2026-08-11 定稿）：
+// 聊天框大小不固定不变——①全局轻微"呼吸"（缓慢放大缩小，画面不死板）
+// ②每条消息进入时轻微放大脉冲（跟说唱节奏同拍，有大小起伏但不每时每刻剧烈变）
+// ③情绪动画（惊讶裂开/兴奋微笑/生气晃动/难过下沉/大笑摇摆/zoom放大强调）优先级最高
+function applyPhoneMotion(emotion, t, dur, breathPhase){
+  const phone = document.getElementById('phone');
+  if(!phone) return;
+  const em = emotion || 'normal';
+  const decay = Math.max(0, 1 - t / (dur * 0.8));
+
+  // ① 呼吸：缓慢轻微，幅度 0.8%，周期约 4s
+  let breath = 1 + 0.008 * Math.sin((breathPhase % 4000) / 4000 * Math.PI * 2);
+
+  // ② 消息进入脉冲：前 450ms 放大弹一下（scale 1→1.03→1），营造节奏感
+  let pulse = 1;
+  if(t >= 0 && t < 450){
+    const p = t / 450;
+    pulse = 1 + 0.03 * Math.sin(p * Math.PI);
+  }
+
+  let transform = '';
+  let extra = {};
+
+  if(em === 'surprise'){
+    if(t < 700 && decay > 0){
+      const s = Math.sin(t / 38) * 0.07 * decay;
+      transform = `scaleX(${breath + s})`;
+    } else {
+      transform = `scale(${breath * pulse})`;
+    }
+    if(t > 180 && t < 900) extra.boxShadow = 'inset 0 0 0 6px #000, 14px 0 0 -3px #fff, -14px 0 0 -3px #fff, 0 0 40px rgba(0,0,0,0.5)';
+  } else if(em === 'excited'){
+    transform = `scale(${breath * pulse})`;
+    extra.borderRadius = '0 0 140px 140px';
+  } else if(em === 'angry'){
+    transform = `scale(${breath * pulse})`;
+    extra.filter = 'hue-rotate(-35deg) saturate(1.4) contrast(1.1)';
+  } else if(em === 'sad'){
+    transform = `scale(${breath * pulse * 0.98})`;
+    extra.filter = 'saturate(0.75) brightness(0.96)';
+  } else if(em === 'laugh'){
+    transform = `scale(${breath * pulse})`;
+  } else if(em === 'zoom'){
+    const z = 1 + 0.05 * decay * Math.max(0, Math.sin(Math.PI * Math.min(1, t / 900)));
+    transform = `scale(${breath * pulse * z})`;
+  } else {
+    transform = `scale(${breath * pulse})`;
+  }
+
+  phone.style.transform = transform;
+  phone.style.boxShadow = extra.boxShadow || 'none';
+  phone.style.borderRadius = extra.borderRadius || '0';
+  phone.style.filter = extra.filter || 'none';
+}
+
+// 缓动
+function easeOutBack(t){ const c1=1.70158,c3=c1+1; return 1+c3*Math.pow(t-1,3)+c1*Math.pow(t-1,2); }
+function easeOutCubic(t){ return 1-Math.pow(1-t,3); }
+function easeOutElastic(t){ const c4=(2*Math.PI)/3; return t===0?0:t===1?1:Math.pow(2,-10*t)*Math.sin((t*10-0.75)*c4)+1; }
+
+const ANIM_IN = 200;
+const UI_HIDE_AT = 3500; // 开场 3.5s 后隐藏完整 UI，只留头像+气泡消息条（用户 2026-08-11 定稿）
+const KEEP_MSGS = 5;      // 画面保留最近 5 条消息（放大 1.5x 后显示条数少一点）
+
+// 节拍表（BGM 重拍时间点，用于字幕严格跟音频同步）
+const BEATS = (SCRIPT._beats || []).map(b => b.t_ms);
+function nearestBeat(ms){
+  if(!BEATS.length) return ms;
+  let best = BEATS[0];
+  for(const bt of BEATS){ if(Math.abs(bt-ms) < Math.abs(best-ms)) best = bt; }
+  return best;
+}
+
+window.renderAt = function(currentMs){
+  // 开场 3.5s 后隐藏状态栏/导航栏/输入栏（display:none 彻底移除，底部不留绿色区域），扩展消息显示区
+  const uiHidden = currentMs > UI_HIDE_AT;
+  ['#status-bar','#nav-bar','#input-bar'].forEach(sel => {
+    const el = document.querySelector(sel);
+    if(el){
+      if(uiHidden){ el.style.display = 'none'; }
+      else { el.style.display = ''; }
+    }
+  });
+  const msgsC = document.getElementById('messages');
+  if(msgsC){
+    if(uiHidden){ msgsC.style.top = '30px'; msgsC.style.bottom = '30px'; }
+    else { msgsC.style.top = '156px'; msgsC.style.bottom = '110px'; }
+  }
+  // UI 隐藏后聊天框背景透明（去掉灰色背景，只留消息气泡悬浮在画面上）
+  const phoneEl = document.getElementById('phone');
+  if(phoneEl) phoneEl.style.background = uiHidden ? 'transparent' : '';
+  // 重置 flash-bar（防止白色斜线残留）
+  const flashBar = document.querySelector('.flash-bar');
+  if(flashBar){ flashBar.style.height = '0'; flashBar.style.opacity = '0'; }
+
+  // 重置特效
+  Object.values(hookMap).forEach(h => { h.node.style.opacity = '0'; h.node.style.transform = 'translateY(-50%) scale(0.4)'; });
+  Object.values(stickerMap).forEach(s => { s.node.style.opacity = '0'; s.node.style.transform = 'scale(0.3) rotate(-20deg)'; });
+  Object.values(beamMap).forEach(b => { b.node.style.opacity = '0'; b.node.style.height = '0'; });
+  Object.values(zoomMap).forEach(z => { z.node.style.opacity = '0'; z.node.style.transform = 'translateY(-50%) scale(0.5)'; });
+  dimOpacity = 0;
+
+  // 找当前激活消息（最新的已开始未结束的 bubble/stack）
+  let activeEl = null;
+  let activeElT = -Infinity;
+  elements.forEach(el => {
+    const t = currentMs - el.start_ms;
+    const dur = el.duration_ms || 2000;
+    if((el.type === 'bubble' || el.type === 'stack') && msgMap[el.id] && t >= 0 && t < dur + ANIM_IN + 300){
+      if(el.start_ms > activeElT){ activeElT = el.start_ms; activeEl = el; }
+    }
+  });
+
+  // 消息显示：已出现的保留（像真实微信记录），未出现 opacity 0；超过最近 KEEP_MSGS 条的最旧消息淡出
+  const activeIdx = activeEl ? activeEl._msgIndex : -1;
+  // 滚动量：让当前消息出现在消息区底部（滚动消息元素自身，不移动容器——容器 transform 会把内容移出 overflow 裁切区导致全黑）
+  let scrollY = 0;
+  if(activeEl){
+    const activeMsg = msgMap[activeEl.id];
+    const viewH = uiHidden ? 940 : 734;
+    scrollY = activeMsg.y - (viewH - 220);
+    if(scrollY < 0) scrollY = 0;
+  }
+  bubbleList.forEach(b => {
+    const el = msgMap[b.id].el;
+    if(currentMs >= el.start_ms){
+      const t = currentMs - el.start_ms;
+      const p = Math.min(1, t / ANIM_IN);
+      const e = easeOutBack(p);
+      // 旧消息保留 0.75 亮度，新消息全亮；超出最近 KEEP_MSGS 条的最旧消息淡出到 0.15
+      let keep = Math.max(e, 0.75);
+      if(activeIdx >= 0 && (activeIdx - el._msgIndex) > KEEP_MSGS - 1){
+        keep = 0.15;
+      }
+      b.node.style.opacity = String(keep);
+      const side = b.side === 'right' ? 1 : -1;
+      // 滚动 = 消息元素自身 translateY(-scrollY)；弹入 = translateX
+      b.node.style.transform = `translateY(${-scrollY}px) translateX(${side*(1-e)*20}px)`;
+    } else {
+      b.node.style.opacity = '0';
+      b.node.style.transform = `translateY(${-scrollY}px)`;
+    }
+  });
+
+  // 滚动：由每条消息元素自身 translateY(-scrollY) 完成（见上方消息显示循环），容器不再 transform
+
+  if(activeEl){
+    // 当前激活消息高亮 + 弹入
+    const activeMsg = msgMap[activeEl.id];
+    const t = currentMs - activeEl.start_ms;
+    const p = Math.min(1, t / ANIM_IN);
+    activeMsg.node.style.opacity = String(p);
+    const side = activeMsg.node.classList.contains('right') ? 1 : -1;
+    activeMsg.node.style.transform = `translateY(${-scrollY}px) translateX(${side*(1-p)*20}px)`;
+
+    // 情绪 + 动态大小动画：聊天框根据消息情绪做动画（惊讶裂开/兴奋微笑抖动/生气晃动/难过下沉/大笑摇摆/放大强调）+ 全局呼吸 + 消息进入脉冲
+    applyPhoneMotion(activeEl.emotion, t, activeEl.duration_ms || 2000, currentMs);
+  } else {
+    // 无激活消息：聊天框复原
+    const phone = document.getElementById('phone');
+    if(phone){
+      phone.style.transform = '';
+      phone.style.boxShadow = 'none';
+      phone.style.borderRadius = '0';
+      phone.style.filter = 'none';
+    }
+  }
+
+  // 字幕：说唱歌词字幕 = 聊天文字，每条 ≤15 字，严格吸附 BGM 节拍跟紧音频（用户 2026-08-11 定稿）
+  const subtitleEl = document.getElementById('subtitle');
+  if(subtitleEl){
+    if(activeEl && msgMap[activeEl.id]){
+      let subText = msgMap[activeEl.id].el.text || '';
+      // 取第一行 + 截断到 15 字
+      subText = subText.split('\n')[0].replace(/[？？!！.。…]+$/,'');
+      if(subText.length > 15) subText = subText.slice(0, 15) + '…';
+      // 字幕显示窗口 = 当前句吸附节拍 ~ 下一句吸附节拍（跟说唱重拍严格同步）
+      const subStart = nearestBeat(activeEl.start_ms);
+      // 找下一句的吸附节拍作为结束
+      let subEnd = subStart + (activeEl.duration_ms || 2000);
+      const nextEl = elements.filter(e => (e.type==='bubble'||e.type==='stack') && msgMap[e.id] && e.start_ms > activeEl.start_ms)
+                             .sort((a,b) => a.start_ms - b.start_ms)[0];
+      if(nextEl) subEnd = nearestBeat(nextEl.start_ms);
+      if(currentMs >= subStart && currentMs < subEnd){
+        subtitleEl.textContent = subText;
+        subtitleEl.style.opacity = '1';
+      } else {
+        subtitleEl.style.opacity = '0';
+      }
+    } else {
+      subtitleEl.style.opacity = '0';
+    }
+  }
+
+  // 特效
+  elements.forEach(el => {
+    const t = currentMs - el.start_ms;
+    const dur = el.duration_ms || 2000;
+
+    if(el.type === 'stack' && msgMap[el.id]){
+      const m = msgMap[el.id];
+      const repeat = el.repeat || 1;
+      const step = el.step_ms || 200;
+      for(let i=0;i<repeat;i++){
+        const st = t - i*step;
+        if(st >= 0 && st < dur + ANIM_IN){
+          const clone = m.node.cloneNode(true);
+          clone.style.position = 'absolute';
+          const sideOff = (m.node.classList.contains('right') ? 1 : -1) * i * 25;
+          clone.style.left = (parseFloat(m.node.style.left || 0) + sideOff) + 'px';
+          clone.style.top = (m.y + i*45) + 'px';
+          clone.style.zIndex = 10 + i;
+          clone.style.transform = `translateY(${-scrollY}px)`;
+          const p = Math.min(1, st / ANIM_IN);
+          const e = easeOutBack(p);
+          clone.style.opacity = String(e * 0.95);
+          msgsContainer.appendChild(clone);
+          setTimeout(()=>{ if(clone.parentNode) clone.parentNode.removeChild(clone); }, 50);
+        }
+      }
+    }
+
+    if(el.type === 'hook' && hookMap[el.id]){
+      if(t >= 0 && t < dur + 600){
+        const p = Math.min(1, t / 350);
+        const e = easeOutElastic(p);
+        const h = hookMap[el.id].node;
+        h.style.opacity = String(Math.min(1, e));
+        h.style.transform = `translateY(-50%) scale(${0.4+0.6*e})`;
+        dimOpacity = Math.max(dimOpacity, 0.5);
+      }
+    }
+
+    if(el.type === 'sticker' && stickerMap[el.id]){
+      if(t >= 0 && t < dur + 400){
+        const p = Math.min(1, t / 280);
+        const e = easeOutBack(p);
+        const s = stickerMap[el.id].node;
+        s.style.opacity = String(e);
+        s.style.transform = `scale(${0.3+0.7*e}) rotate(${(1-e)*-20}deg)`;
+      }
+    }
+
+    if(el.type === 'beam' && beamMap[el.id]){
+      if(t >= 0 && t < dur + 800){
+        const p = Math.min(1, t / 500);
+        const e = easeOutCubic(p);
+        const b = beamMap[el.id].node;
+        b.style.opacity = String(0.8 * e);
+        b.style.height = (500 * e) + 'px';
+      }
+    }
+
+    if(el.type === 'textzoom' && zoomMap[el.id]){
+      if(t >= 0 && t < dur + 500){
+        const p = Math.min(1, t / 300);
+        const e = easeOutBack(p);
+        const z = zoomMap[el.id].node;
+        z.style.opacity = String(e);
+        z.style.transform = `translateY(-50%) scale(${0.5+0.5*e})`;
+        dimOpacity = Math.max(dimOpacity, 0.35);
+      }
+    }
+
+    if(el.type === 'flash' && t >= 0 && t < dur){
+      const fb = document.querySelector('.flash-bar');
+      const p = t / dur;
+      const fade = Math.sin(p * Math.PI);
+      fb.style.height = (80 * fade) + 'px';
+      fb.style.opacity = String(fade);
+    }
+  });
+
+  applyDim();
+};
+
+window.renderAt(window.__CURRENT_MS__ || 0);
+</script>
+</body>
+</html>
