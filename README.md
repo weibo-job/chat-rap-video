@@ -30,7 +30,7 @@ Requires: **Node.js 18+**, **ffmpeg**, **Playwright chromium**, and optionally *
 
 ```bash
 # 1. Clone
-git clone https://github.com/<you>/chat-rap-video.git
+git clone https://github.com/weibo-job/chat-rap-video.git
 cd chat-rap-video
 
 # 2. Node deps (playwright + ffmpeg-static)
