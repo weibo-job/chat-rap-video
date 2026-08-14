@@ -23,7 +23,7 @@
 需要：**Node.js 18+**、**ffmpeg**、**Playwright chromium**，可选 **mlx-whisper**（Python）+ **Flova CLI**。
 
 ```bash
-git clone <repo-url> && cd chat-rap-video
+git clone https://github.com/weibo-job/chat-rap-video.git && cd chat-rap-video
 npm install && npx playwright install chromium
 pip install mlx-whisper        # 可选：说唱时间戳对齐
 curl -fsSL https://cli.flova.ai/install.sh | sh && flova auth login --no-browser  # 可选：付费说唱BGM
